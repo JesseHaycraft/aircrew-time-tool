@@ -1,7 +1,7 @@
 // Slider page: stacked per-zone day bars dragged under a fixed center
 // line. The line is the selected instant; bars carry local-day segments
 // whose widths come from real midnight boundaries (23/25 h across DST).
-import * as T from './time-engine.js?v=0.3.1';
+import * as T from './time-engine.js?v=0.3.2';
 
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
