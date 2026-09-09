@@ -4,7 +4,7 @@ import {
   isLeapYear, daysInYear, dayOfYearUtc, parseTimeHHMM, parseJulianDay,
   parseOffset, offsetToHMM, resolveJulianYear, makeUtcInstant,
   zonedParts, isValidZone, buildCopyText,
-  zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName,
+  zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName, zoneWallToUtc,
 } from '../js/time-engine.js';
 
 test('leap years', () => {
@@ -88,6 +88,19 @@ test('half-hour zones and the date line', () => {
   const nz = zonedParts(Date.UTC(2026, 0, 1, 12, 0), 'Pacific/Auckland');
   assert.equal(nz.hhmm, '0100');
   assert.equal(nz.day, '02'); // already the next calendar day
+});
+
+test('local wall time to UTC', () => {
+  assert.equal(zoneWallToUtc('America/New_York', 2026, 9, 11, 1, 30), Date.UTC(2026, 8, 11, 5, 30)); // EDT
+  assert.equal(zoneWallToUtc('America/New_York', 2026, 11, 5, 10, 0), Date.UTC(2026, 10, 5, 15, 0)); // EST
+  assert.equal(zoneWallToUtc('Asia/Kolkata', 2026, 1, 15, 11, 0), Date.UTC(2026, 0, 15, 5, 30));
+  assert.equal(zoneWallToUtc('UTC', 2026, 9, 11, 5, 30), Date.UTC(2026, 8, 11, 5, 30));
+  // fall-back: 0130 on 1 Nov 2026 in New York happens twice; the earlier
+  // (EDT) instant is returned
+  assert.equal(zoneWallToUtc('America/New_York', 2026, 11, 1, 1, 30), Date.UTC(2026, 10, 1, 5, 30));
+  // spring-forward: 0230 on 8 Mar 2026 doesn't exist; resolves just past
+  // the gap (0330 EDT)
+  assert.equal(zoneWallToUtc('America/New_York', 2026, 3, 8, 2, 30), Date.UTC(2026, 2, 8, 7, 30));
 });
 
 test('zone validation', () => {

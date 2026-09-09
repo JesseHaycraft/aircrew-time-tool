@@ -7,7 +7,7 @@
 <meta name="description" content="Convert Julian day + Zulu takeoff times into local event timelines for flight crews.">
 <meta name="theme-color" content="#0b0e13">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%230b0e13'/%3E%3Ctext%20x='32'%20y='46'%20font-size='38'%20font-family='monospace'%20font-weight='bold'%20text-anchor='middle'%20fill='%23f5b83d'%3EZ%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=0.2.2">
+<link rel="stylesheet" href="css/style.css?v=0.2.3">
 </head>
 <body>
 <header>
@@ -27,7 +27,10 @@
         <input id="caldate" type="date" hidden>
       </div>
       <div class="input-group">
-        <div class="input-top"><span>Zulu time</span></div>
+        <div class="input-top mode-toggle">
+          <button id="mode-zulu" type="button">Zulu</button>
+          <button id="mode-local" type="button">Local</button>
+        </div>
         <input id="ztime" inputmode="numeric" placeholder="0530" maxlength="5" autocomplete="off">
       </div>
     </div>
@@ -42,7 +45,7 @@
       </div>
       <button id="zone-device-btn" type="button" class="ghost">Set device zone</button>
     </div>
-    <p class="hint">Zulu times convert to this zone (defaults to your device&rsquo;s zone).</p>
+    <p class="hint">Zulu times convert to/from this zone (defaults to your device&rsquo;s zone).</p>
   </section>
 
   <section class="card results">
@@ -77,15 +80,14 @@
       <div id="tpl-list" class="tpl-list"></div>
       <div class="row-actions">
         <button id="tpl-new" type="button">+ New template</button>
-        <button id="tpl-restore" type="button" class="ghost">Restore default</button>
       </div>
-      <p class="hint">Tap a template to edit it. The template in use is picked on the main screen.</p>
     </div>
 
     <div id="tpl-editor-view" hidden>
       <div class="overlay-head editor-head">
         <button id="tpl-back" type="button" class="ghost">&lsaquo; Templates</button>
         <h2>Edit template</h2>
+        <button id="tpl-save" class="primary" type="button">Save</button>
       </div>
       <div class="tpl-name-row">
         <label>Template name
@@ -102,7 +104,7 @@
       <div class="row-actions">
         <button id="tpl-add-event" type="button">+ Add event</button>
       </div>
-      <p class="hint">Offsets are relative to takeoff: <code>-2:30</code> = 2&nbsp;h 30&nbsp;min before, plain numbers are minutes. Use <code>+</code> for after takeoff. Changes save automatically.</p>
+      <p class="hint">Offsets are relative to takeoff: <code>-2:30</code> = 2&nbsp;h 30&nbsp;min before, plain numbers are minutes. Use <code>+</code> for after takeoff. Save keeps your changes; &lsaquo;&nbsp;Templates discards them.</p>
     </div>
 
   </div>
@@ -113,6 +115,6 @@
   <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues" target="_blank" rel="noopener">Report an issue</a> &middot;
   <span>All times are computed on your device. No data is shared over the internet.</span>
 </footer>
-<script type="module" src="js/app.js?v=0.2.2"></script>
+<script type="module" src="js/app.js?v=0.2.3"></script>
 </body>
 </html>

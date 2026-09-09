@@ -89,6 +89,11 @@ function formatterFor(zone, kind = 'parts') {
       },
       offset: { timeZone: zone, timeZoneName: 'shortOffset' },
       long: { timeZone: zone, timeZoneName: 'long' },
+      wall: {
+        timeZone: zone, hourCycle: 'h23',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      },
     }[kind];
     f = new Intl.DateTimeFormat('en-US', options);
     formatterCache.set(key, f);
@@ -119,6 +124,32 @@ export function zonedParts(ms, zone) {
     zoneAbbr: parts.timeZoneName.replace(/\s/g, ''),
     dateKey: `${parts.year}-${parts.month}-${parts.day}`,
   };
+}
+
+function wallParts(ms, zone) {
+  const parts = {};
+  for (const p of formatterFor(zone, 'wall').formatToParts(ms)) parts[p.type] = p.value;
+  return {
+    year: Number(parts.year), month: Number(parts.month), day: Number(parts.day),
+    hour: Number(parts.hour), minute: Number(parts.minute),
+  };
+}
+
+// Wall-clock time in a zone → UTC instant, by iteratively correcting a
+// guess until the zone shows the wanted wall time. DST edges are resolved
+// deterministically: a fall-back time that occurs twice returns the earlier
+// (pre-transition) instant; a spring-forward time that doesn't exist lands
+// just past the gap. The displayed Zulu conversion is the user's check.
+export function zoneWallToUtc(zone, year, month1, day, hour, minute) {
+  const want = Date.UTC(year, month1 - 1, day, hour, minute);
+  let guess = want;
+  for (let i = 0; i < 3; i++) {
+    const p = wallParts(guess, zone);
+    const shown = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
+    if (shown === want) break;
+    guess += want - shown;
+  }
+  return guess;
 }
 
 // "America/New_York" → "New York"
