@@ -6,7 +6,7 @@ A one-screen utility for flight crews: take the Julian day + Zulu takeoff time f
 
 ## Status
 
-v0.2.7 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
+v0.2.8 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
 
 ## Features (v0.1)
 
@@ -22,7 +22,6 @@ v0.2.7 — early field testing. Found a wrong time or a rough edge? [Open an iss
 ## Example output
 
 ```
-T/O FRI 11 SEP 26: 0530Z / 0130 EDT (FRI 11)
 STOP DRINK: 1730Z (THU 10) / 1330 EDT (THU 10)
 LFA: 0115Z (FRI 11) / 2115 EDT (THU 10)
 BUS: 0215Z (FRI 11) / 2215 EDT (THU 10)

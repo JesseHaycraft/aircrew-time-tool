@@ -284,13 +284,18 @@ th {
   letter-spacing: 0.08em; color: var(--muted);
 }
 tbody tr:last-child td { border-bottom: none; }
-.time-cell { font-family: var(--mono); color: var(--bright); }
+/* Day flags sit uniformly: beside the time on wide screens, on their own
+   line below it on phones — never a mix decided by per-cell wrapping. */
+.time-cell { font-family: var(--mono); color: var(--bright); white-space: nowrap; }
 .day-flag {
   font-size: 0.8rem;
   color: var(--bright);
   opacity: 0.75;
   white-space: nowrap;
   display: inline-block;
+}
+@media (max-width: 480px) {
+  .day-flag { display: block; margin-top: 1px; }
 }
 .tl-name { color: var(--bright); }
 .tl-off { font-family: var(--mono); font-size: 0.8rem; color: var(--bright); opacity: 0.6; }
