@@ -1,9 +1,9 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.2.4';
+import * as T from './time-engine.js?v=0.2.5';
 
-const VERSION = 'v0.2.4';
+const VERSION = 'v0.2.5';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -109,7 +109,6 @@ const timelineTable = $('timeline-table');
 const timelineHead = $('timeline-head');
 const timelineBody = $('timeline-body');
 const copyBtn = $('copy-btn');
-const shareBtn = $('share-btn');
 const deviceBtn = $('zone-device-btn');
 const tplSelectBtn = $('tpl-select-btn');
 const tplSelectLabel = $('tpl-select-label');
@@ -296,7 +295,6 @@ function showTplMenu() {
 
 function renderTimeline() {
   copyBtn.disabled = takeoffMs === null;
-  shareBtn.disabled = takeoffMs === null;
   if (takeoffMs === null) {
     timelineTable.hidden = true;
     return;
@@ -326,21 +324,26 @@ function renderTimeline() {
     nameTd.append(offSpan);
     tr.append(nameTd);
 
+    const dayFlag = (parts) => {
+      const span = document.createElement('span');
+      span.className = 'day-flag';
+      span.textContent = `(${parts.weekday} ${Number(parts.day)})`;
+      return span;
+    };
+
     const zp = T.zonedParts(ms, 'UTC');
     const evDoy = T.dayOfYearUtc(ms);
     const zTd = document.createElement('td');
     zTd.className = 'time-cell';
-    zTd.textContent = evDoy === toDoy
-      ? `${zp.hhmm}Z`
-      : `${zp.hhmm}Z (${zp.weekday} ${Number(zp.day)})`;
+    zTd.append(`${zp.hhmm}Z`);
+    if (evDoy !== toDoy) zTd.append(' ', dayFlag(zp));
     tr.append(zTd);
 
     const p = T.zonedParts(ms, state.zone);
     const localTd = document.createElement('td');
     localTd.className = 'time-cell';
-    localTd.textContent = p.dateKey === takeoffLocal.dateKey
-      ? `${p.hhmm}L`
-      : `${p.hhmm}L (${p.weekday} ${Number(p.day)})`;
+    localTd.append(`${p.hhmm}L`);
+    if (p.dateKey !== takeoffLocal.dateKey) localTd.append(' ', dayFlag(p));
     tr.append(localTd);
 
     timelineBody.append(tr);
@@ -816,15 +819,6 @@ function init() {
     }
     flash(copyBtn, 'Copied ✓');
   });
-
-  if (navigator.share) {
-    shareBtn.addEventListener('click', () => {
-      if (takeoffMs === null) return;
-      navigator.share({ text: currentCopyText() }).catch(() => { /* user cancelled */ });
-    });
-  } else {
-    shareBtn.hidden = true;
-  }
 
   computeAll();
 }

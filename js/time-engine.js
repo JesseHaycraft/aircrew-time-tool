@@ -193,7 +193,7 @@ export function buildCopyText(takeoffMs, events, zones) {
     }),
   ];
   const lines = [
-    `T/O DAY ${String(toDoy).padStart(3, '0')} (${z.weekday} ${z.day} ${z.month} ${z.year.slice(2)}): ${takeoffCols.join(' / ')}`,
+    `T/O ${z.weekday} ${z.day} ${z.month} ${z.year.slice(2)}: ${takeoffCols.join(' / ')}`,
   ];
   const sorted = [...events].sort((a, b) => a.offsetMin - b.offsetMin);
   for (const ev of sorted) {
@@ -201,7 +201,7 @@ export function buildCopyText(takeoffMs, events, zones) {
     const evZ = zonedParts(ms, 'UTC');
     const evDoy = dayOfYearUtc(ms);
     const cols = [
-      evDoy === toDoy ? `${evZ.hhmm}Z` : `${String(evDoy).padStart(3, '0')}/${evZ.hhmm}Z`,
+      evDoy === toDoy ? `${evZ.hhmm}Z` : `${evZ.hhmm}Z (${evZ.weekday} ${Number(evZ.day)})`,
     ];
     for (const zone of zones) {
       const p = zonedParts(ms, zone);

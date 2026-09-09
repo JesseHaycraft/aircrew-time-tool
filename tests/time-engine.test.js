@@ -117,7 +117,7 @@ test('copy text: full timeline with day-change flags', () => {
     { name: 'Brief', offsetMin: -180 },
   ], ['America/New_York']);
   assert.equal(text, [
-    'T/O DAY 254 (FRI 11 SEP 26): 0530Z / 0130 EDT',
+    'T/O FRI 11 SEP 26: 0530Z / 0130 EDT',
     'BRIEF: 0230Z / 2230 EDT (THU 10)',
     'TAKEOFF: 0530Z / 0130 EDT',
   ].join('\n'));
@@ -139,12 +139,12 @@ test('zone names and UTC offsets', () => {
 test('copy text uses zone names, never GMT offsets', () => {
   const takeoff = makeUtcInstant(2026, 254, 5, 30);
   const text = buildCopyText(takeoff, [{ name: 'Takeoff', offsetMin: 0 }], ['Pacific/Guam']);
-  assert.equal(text.split('\n')[0], 'T/O DAY 254 (FRI 11 SEP 26): 0530Z / 1530 Guam');
+  assert.equal(text.split('\n')[0], 'T/O FRI 11 SEP 26: 0530Z / 1530 Guam');
   assert.equal(text.split('\n')[1], 'TAKEOFF: 0530Z / 1530 Guam');
 });
 
-test('copy text: Zulu rollover shows the Julian day', () => {
+test('copy text: Zulu rollover shows the weekday', () => {
   const takeoff = makeUtcInstant(2026, 254, 1, 30);
   const text = buildCopyText(takeoff, [{ name: 'Brief', offsetMin: -240 }], []);
-  assert.equal(text.split('\n')[1], 'BRIEF: 253/2130Z');
+  assert.equal(text.split('\n')[1], 'BRIEF: 2130Z (THU 10)');
 });
