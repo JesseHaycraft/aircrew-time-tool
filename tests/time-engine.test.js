@@ -117,9 +117,9 @@ test('copy text: full timeline with day-change flags', () => {
     { name: 'Brief', offsetMin: -180 },
   ], ['America/New_York']);
   assert.equal(text, [
-    'T/O FRI 11 SEP 26: 0530Z / 0130 EDT',
-    'BRIEF: 0230Z / 2230 EDT (THU 10)',
-    'TAKEOFF: 0530Z / 0130 EDT',
+    'T/O FRI 11 SEP 26: 0530Z / 0130 EDT (FRI 11)',
+    'BRIEF: 0230Z (FRI 11) / 2230 EDT (THU 10)',
+    'TAKEOFF: 0530Z (FRI 11) / 0130 EDT (FRI 11)',
   ].join('\n'));
 });
 
@@ -143,15 +143,28 @@ test('copy text uses zone names, never GMT offsets', () => {
   assert.equal(text.split('\n')[1], 'TAKEOFF: 0530Z / 1530 Guam');
 });
 
-test('copy text: local day rolling forward from the Zulu day is flagged', () => {
+test('copy text: multiple days present puts a day on every time', () => {
   const takeoff = makeUtcInstant(2026, 252, 20, 2); // WED 09 SEP 2026 2002Z
   const text = buildCopyText(takeoff, [
     { name: 'Takeoff', offsetMin: 0 },
     { name: 'Stop drink', offsetMin: -720 },
   ], ['Pacific/Guam']);
   assert.equal(text.split('\n')[0], 'T/O WED 09 SEP 26: 2002Z / 0602 Guam (THU 10)');
-  assert.equal(text.split('\n')[1], 'STOP DRINK: 0802Z / 1802 Guam'); // same Zulu day, no flag
-  assert.equal(text.split('\n')[2], 'TAKEOFF: 2002Z / 0602 Guam (THU 10)');
+  assert.equal(text.split('\n')[1], 'STOP DRINK: 0802Z (WED 9) / 1802 Guam (WED 9)');
+  assert.equal(text.split('\n')[2], 'TAKEOFF: 2002Z (WED 9) / 0602 Guam (THU 10)');
+});
+
+test('copy text: single-day sequences carry no flags at all', () => {
+  const takeoff = makeUtcInstant(2026, 254, 12, 0); // FRI 11 SEP 1200Z
+  const text = buildCopyText(takeoff, [
+    { name: 'Takeoff', offsetMin: 0 },
+    { name: 'Brief', offsetMin: -120 },
+  ], ['Pacific/Guam']); // 1200Z→2200 local, 1000Z→2000 local, all FRI 11
+  assert.equal(text, [
+    'T/O FRI 11 SEP 26: 1200Z / 2200 Guam',
+    'BRIEF: 1000Z / 2000 Guam',
+    'TAKEOFF: 1200Z / 2200 Guam',
+  ].join('\n'));
 });
 
 test('copy text: Zulu rollover shows the weekday', () => {

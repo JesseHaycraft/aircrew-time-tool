@@ -183,36 +183,46 @@ export function zoneDisplayName(ms, zone) {
 // Plain-text timeline for pasting into messaging apps. Proportional fonts
 // mangle space-aligned columns, so lines are label-first and short.
 export function buildCopyText(takeoffMs, events, zones) {
-  const toDoy = dayOfYearUtc(takeoffMs);
   const z = zonedParts(takeoffMs, 'UTC');
-  // Every day flag is relative to the takeoff Zulu date shown in the
-  // header — a local time rolling forward past midnight is flagged just
-  // like a Zulu time rolling back.
+  const sorted = [...events].sort((a, b) => a.offsetMin - b.offsetMin);
+  const rows = sorted.map((ev) => {
+    const ms = takeoffMs + ev.offsetMin * 60_000;
+    return {
+      ev,
+      zp: zonedParts(ms, 'UTC'),
+      locals: zones.map((zone) => ({ p: zonedParts(ms, zone), name: zoneDisplayName(ms, zone) })),
+    };
+  });
+  const headerLocals = zones.map((zone) => ({
+    p: zonedParts(takeoffMs, zone),
+    name: zoneDisplayName(takeoffMs, zone),
+  }));
+
+  // All-or-nothing day flags: as soon as more than one calendar day
+  // appears anywhere in the output, every time states its day; when
+  // everything shares one day, no flags at all.
+  const dateKeys = new Set([z.dateKey]);
+  for (const l of headerLocals) dateKeys.add(l.p.dateKey);
+  for (const r of rows) {
+    dateKeys.add(r.zp.dateKey);
+    for (const l of r.locals) dateKeys.add(l.p.dateKey);
+  }
+  const showFlags = dateKeys.size > 1;
+  const flag = (p) => (showFlags ? ` (${p.weekday} ${Number(p.day)})` : '');
+
   const takeoffCols = [
-    `${z.hhmm}Z`,
-    ...zones.map((zone) => {
-      const p = zonedParts(takeoffMs, zone);
-      const flag = p.dateKey === z.dateKey ? '' : ` (${p.weekday} ${Number(p.day)})`;
-      return `${p.hhmm} ${zoneDisplayName(takeoffMs, zone)}${flag}`;
-    }),
+    `${z.hhmm}Z`, // the header line already names the Zulu day in full
+    ...headerLocals.map((l) => `${l.p.hhmm} ${l.name}${flag(l.p)}`),
   ];
   const lines = [
     `T/O ${z.weekday} ${z.day} ${z.month} ${z.year.slice(2)}: ${takeoffCols.join(' / ')}`,
   ];
-  const sorted = [...events].sort((a, b) => a.offsetMin - b.offsetMin);
-  for (const ev of sorted) {
-    const ms = takeoffMs + ev.offsetMin * 60_000;
-    const evZ = zonedParts(ms, 'UTC');
-    const evDoy = dayOfYearUtc(ms);
+  for (const r of rows) {
     const cols = [
-      evDoy === toDoy ? `${evZ.hhmm}Z` : `${evZ.hhmm}Z (${evZ.weekday} ${Number(evZ.day)})`,
+      `${r.zp.hhmm}Z${flag(r.zp)}`,
+      ...r.locals.map((l) => `${l.p.hhmm} ${l.name}${flag(l.p)}`),
     ];
-    for (const zone of zones) {
-      const p = zonedParts(ms, zone);
-      const flag = p.dateKey === z.dateKey ? '' : ` (${p.weekday} ${Number(p.day)})`;
-      cols.push(`${p.hhmm} ${zoneDisplayName(ms, zone)}${flag}`);
-    }
-    lines.push(`${ev.name.toUpperCase()}: ${cols.join(' / ')}`);
+    lines.push(`${r.ev.name.toUpperCase()}: ${cols.join(' / ')}`);
   }
   return lines.join('\n');
 }

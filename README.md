@@ -6,7 +6,7 @@ A one-screen utility for flight crews: take the Julian day + Zulu takeoff time f
 
 ## Status
 
-v0.2.6 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
+v0.2.7 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
 
 ## Features (v0.1)
 
@@ -15,18 +15,18 @@ v0.2.6 — early field testing. Found a wrong time or a rough edge? [Open an iss
 - Takeoff time entered as Zulu or as local time in the selected zone (toggle); local entry converts DST-correctly
 - Local times in your device's time zone by default — searchable zone picker (city, zone name, abbreviation, or offset), DST-correct as of the event date
 - Named event templates saved on your device — create, edit, duplicate, delete; takeoff (0:00) is always included; ships with a "Standard" template (Stop drink T−12:00, LFA T−4:15, Bus T−3:15)
-- Times on a different day than the takeoff Zulu date are flagged with the weekday — backward (`1730Z (THU 10)`) and forward (`0602L (THU 10)`) rolls alike
+- If the sequence spans more than one calendar day, every time carries its weekday (`1730Z (THU 10)`); single-day sequences show no flags
 - One-tap copy of the whole sequence of events as plain text
 - No accounts, no server, no tracking — everything is computed on-device
 
 ## Example output
 
 ```
-T/O FRI 11 SEP 26: 0530Z / 0130 EDT
+T/O FRI 11 SEP 26: 0530Z / 0130 EDT (FRI 11)
 STOP DRINK: 1730Z (THU 10) / 1330 EDT (THU 10)
-LFA: 0115Z / 2115 EDT (THU 10)
-BUS: 0215Z / 2215 EDT (THU 10)
-TAKEOFF: 0530Z / 0130 EDT
+LFA: 0115Z (FRI 11) / 2115 EDT (THU 10)
+BUS: 0215Z (FRI 11) / 2215 EDT (THU 10)
+TAKEOFF: 0530Z (FRI 11) / 0130 EDT (FRI 11)
 ```
 
 ## Roadmap

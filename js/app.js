@@ -1,9 +1,9 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.2.6';
+import * as T from './time-engine.js?v=0.2.7';
 
-const VERSION = 'v0.2.6';
+const VERSION = 'v0.2.7';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -134,6 +134,7 @@ const allZoneIds = typeof Intl.supportedValuesOf === 'function'
   ? Intl.supportedValuesOf('timeZone')
   : ['UTC'];
 let zoneIndex = null;
+let zoneIndexById = null;
 
 // Well-known zones outrank obscure alphabetical neighbors on ties, so
 // "eastern standard" surfaces New York before Cancun and Coral Harbour.
@@ -181,9 +182,22 @@ function buildZoneIndex() {
       try { idx.push(buildZoneEntry(allZoneIds[i])); } catch { /* skip unformattable zone */ }
     }
     if (i < allZoneIds.length) setTimeout(step, 0);
-    else zoneIndex = idx;
+    else {
+      zoneIndex = idx;
+      zoneIndexById = new Map(idx.map((e) => [e.id, e]));
+    }
   };
   step();
+}
+
+// Browse list for an untyped click: major zones first, then the full
+// catalog alphabetically.
+function browseEntries() {
+  const majors = [];
+  const rest = [];
+  for (const id of allZoneIds) (MAJOR_ZONES.has(id) ? majors : rest).push(id);
+  return [...majors, ...rest].map((id) =>
+    zoneIndexById?.get(id) ?? { id, display: '', offset: '' });
 }
 
 function searchZones(query) {
@@ -228,12 +242,13 @@ function hideSuggest() {
 }
 
 function showSuggest(query) {
-  const results = searchZones(query);
+  const results = query ? searchZones(query) : browseEntries();
   if (!results.length) { hideSuggest(); return; }
   suggestEl.replaceChildren();
   for (const r of results) {
     const btn = document.createElement('button');
     btn.type = 'button';
+    if (r.id === state.zone) btn.className = 'active';
     const idSpan = document.createElement('span');
     idSpan.className = 'zs-id';
     idSpan.textContent = r.id;
@@ -308,13 +323,28 @@ function renderTimeline() {
   headRow.append(localCell);
   timelineHead.replaceChildren(headRow);
 
-  const toDoy = T.dayOfYearUtc(takeoffMs);
-  // All day flags reference the takeoff Zulu date shown in the header,
-  // so local times rolling forward past midnight get flagged too.
-  const refDateKey = T.zonedParts(takeoffMs, 'UTC').dateKey;
-  timelineBody.replaceChildren();
-  for (const ev of timelineEvents()) {
+  // All-or-nothing day flags: if more than one calendar day appears in
+  // the sequence (either column), every time states its day; when
+  // everything shares one day, no flags at all.
+  const rows = timelineEvents().map((ev) => {
     const ms = takeoffMs + ev.offsetMin * 60_000;
+    return { ev, zp: T.zonedParts(ms, 'UTC'), lp: T.zonedParts(ms, state.zone) };
+  });
+  const dateKeys = new Set();
+  for (const r of rows) {
+    dateKeys.add(r.zp.dateKey);
+    dateKeys.add(r.lp.dateKey);
+  }
+  const showFlags = dateKeys.size > 1;
+  const dayFlag = (parts) => {
+    const span = document.createElement('span');
+    span.className = 'day-flag';
+    span.textContent = `(${parts.weekday} ${Number(parts.day)})`;
+    return span;
+  };
+
+  timelineBody.replaceChildren();
+  for (const { ev, zp, lp } of rows) {
     const tr = document.createElement('tr');
 
     const nameTd = document.createElement('td');
@@ -326,26 +356,16 @@ function renderTimeline() {
     nameTd.append(offSpan);
     tr.append(nameTd);
 
-    const dayFlag = (parts) => {
-      const span = document.createElement('span');
-      span.className = 'day-flag';
-      span.textContent = `(${parts.weekday} ${Number(parts.day)})`;
-      return span;
-    };
-
-    const zp = T.zonedParts(ms, 'UTC');
-    const evDoy = T.dayOfYearUtc(ms);
     const zTd = document.createElement('td');
     zTd.className = 'time-cell';
     zTd.append(`${zp.hhmm}Z`);
-    if (evDoy !== toDoy) zTd.append(' ', dayFlag(zp));
+    if (showFlags) zTd.append(' ', dayFlag(zp));
     tr.append(zTd);
 
-    const p = T.zonedParts(ms, state.zone);
     const localTd = document.createElement('td');
     localTd.className = 'time-cell';
-    localTd.append(`${p.hhmm}L`);
-    if (p.dateKey !== refDateKey) localTd.append(' ', dayFlag(p));
+    localTd.append(`${lp.hhmm}L`);
+    if (showFlags) localTd.append(' ', dayFlag(lp));
     tr.append(localTd);
 
     timelineBody.append(tr);
@@ -758,11 +778,13 @@ function init() {
   modeZuluBtn.addEventListener('click', () => setTimeMode('zulu'));
   modeLocalBtn.addEventListener('click', () => setTimeMode('local'));
 
-  zoneInput.addEventListener('focus', () => zoneInput.select());
+  zoneInput.addEventListener('focus', () => {
+    zoneInput.select();
+    showSuggest(''); // browse list on plain click; typing narrows it
+  });
   zoneInput.addEventListener('input', () => {
     zoneInput.classList.remove('invalid');
-    const q = zoneInput.value.trim();
-    if (q) showSuggest(q); else hideSuggest();
+    showSuggest(zoneInput.value.trim());
   });
   zoneInput.addEventListener('blur', () => {
     setTimeout(() => {
