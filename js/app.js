@@ -1,6 +1,6 @@
 import * as T from './time-engine.js';
 
-const VERSION = 'v0.1.5';
+const VERSION = 'v0.1.6';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 

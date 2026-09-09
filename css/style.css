@@ -46,11 +46,8 @@ main { max-width: 780px; margin: 0 auto; padding: 12px 16px 32px; }
 .hint code { font-family: var(--mono); }
 
 /* ---- results card: visually distinct from the input cards above it ---- */
-.card.results {
-  background: var(--results-bg);
-  border-left: 3px solid var(--accent);
-}
-.card.results h2 { color: var(--accent); }
+.card.results { background: var(--results-bg); }
+.card.results h2 { color: var(--bright); }
 
 input, button {
   font: inherit;
