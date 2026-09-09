@@ -143,6 +143,17 @@ test('copy text uses zone names, never GMT offsets', () => {
   assert.equal(text.split('\n')[1], 'TAKEOFF: 0530Z / 1530 Guam');
 });
 
+test('copy text: local day rolling forward from the Zulu day is flagged', () => {
+  const takeoff = makeUtcInstant(2026, 252, 20, 2); // WED 09 SEP 2026 2002Z
+  const text = buildCopyText(takeoff, [
+    { name: 'Takeoff', offsetMin: 0 },
+    { name: 'Stop drink', offsetMin: -720 },
+  ], ['Pacific/Guam']);
+  assert.equal(text.split('\n')[0], 'T/O WED 09 SEP 26: 2002Z / 0602 Guam (THU 10)');
+  assert.equal(text.split('\n')[1], 'STOP DRINK: 0802Z / 1802 Guam'); // same Zulu day, no flag
+  assert.equal(text.split('\n')[2], 'TAKEOFF: 2002Z / 0602 Guam (THU 10)');
+});
+
 test('copy text: Zulu rollover shows the weekday', () => {
   const takeoff = makeUtcInstant(2026, 254, 1, 30);
   const text = buildCopyText(takeoff, [{ name: 'Brief', offsetMin: -240 }], []);

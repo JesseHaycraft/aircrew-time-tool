@@ -185,11 +185,15 @@ export function zoneDisplayName(ms, zone) {
 export function buildCopyText(takeoffMs, events, zones) {
   const toDoy = dayOfYearUtc(takeoffMs);
   const z = zonedParts(takeoffMs, 'UTC');
+  // Every day flag is relative to the takeoff Zulu date shown in the
+  // header — a local time rolling forward past midnight is flagged just
+  // like a Zulu time rolling back.
   const takeoffCols = [
     `${z.hhmm}Z`,
     ...zones.map((zone) => {
       const p = zonedParts(takeoffMs, zone);
-      return `${p.hhmm} ${zoneDisplayName(takeoffMs, zone)}`;
+      const flag = p.dateKey === z.dateKey ? '' : ` (${p.weekday} ${Number(p.day)})`;
+      return `${p.hhmm} ${zoneDisplayName(takeoffMs, zone)}${flag}`;
     }),
   ];
   const lines = [
@@ -205,8 +209,7 @@ export function buildCopyText(takeoffMs, events, zones) {
     ];
     for (const zone of zones) {
       const p = zonedParts(ms, zone);
-      const tp = zonedParts(takeoffMs, zone);
-      const flag = p.dateKey === tp.dateKey ? '' : ` (${p.weekday} ${Number(p.day)})`;
+      const flag = p.dateKey === z.dateKey ? '' : ` (${p.weekday} ${Number(p.day)})`;
       cols.push(`${p.hhmm} ${zoneDisplayName(ms, zone)}${flag}`);
     }
     lines.push(`${ev.name.toUpperCase()}: ${cols.join(' / ')}`);

@@ -1,9 +1,9 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.2.5';
+import * as T from './time-engine.js?v=0.2.6';
 
-const VERSION = 'v0.2.5';
+const VERSION = 'v0.2.6';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -309,7 +309,9 @@ function renderTimeline() {
   timelineHead.replaceChildren(headRow);
 
   const toDoy = T.dayOfYearUtc(takeoffMs);
-  const takeoffLocal = T.zonedParts(takeoffMs, state.zone);
+  // All day flags reference the takeoff Zulu date shown in the header,
+  // so local times rolling forward past midnight get flagged too.
+  const refDateKey = T.zonedParts(takeoffMs, 'UTC').dateKey;
   timelineBody.replaceChildren();
   for (const ev of timelineEvents()) {
     const ms = takeoffMs + ev.offsetMin * 60_000;
@@ -343,7 +345,7 @@ function renderTimeline() {
     const localTd = document.createElement('td');
     localTd.className = 'time-cell';
     localTd.append(`${p.hhmm}L`);
-    if (p.dateKey !== takeoffLocal.dateKey) localTd.append(' ', dayFlag(p));
+    if (p.dateKey !== refDateKey) localTd.append(' ', dayFlag(p));
     tr.append(localTd);
 
     timelineBody.append(tr);
