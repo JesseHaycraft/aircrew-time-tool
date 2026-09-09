@@ -1,6 +1,9 @@
-import * as T from './time-engine.js';
+// The ?v= query on this import and on the <script>/<link> tags in
+// index.html must move together each release — it pins the browser
+// cache so a new HTML page can never run against stale JS.
+import * as T from './time-engine.js?v=0.2.1';
 
-const VERSION = 'v0.2.0';
+const VERSION = 'v0.2.1';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -17,6 +20,8 @@ const newId = () => (crypto.randomUUID
 function makeDefaultTemplate() {
   return { id: newId(), name: 'Standard', events: DEFAULT_TEMPLATE_EVENTS.map((e) => ({ ...e })) };
 }
+
+const todayUtcStr = () => new Date().toISOString().slice(0, 10);
 
 let state = loadState();
 let takeoffMs = null;
@@ -53,6 +58,10 @@ function loadState() {
   return {
     doy: typeof s.doy === 'string' ? s.doy : '',
     time: typeof s.time === 'string' ? s.time : '',
+    dateMode: s.dateMode === 'calendar' ? 'calendar' : 'julian',
+    calDate: typeof s.calDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.calDate)
+      ? s.calDate
+      : todayUtcStr(),
     zone,
     templates,
     activeTemplateId,
@@ -78,6 +87,9 @@ function timelineEvents() {
 
 const $ = (id) => document.getElementById(id);
 const doyInput = $('doy');
+const calInput = $('caldate');
+const modeJulianBtn = $('mode-julian');
+const modeCalBtn = $('mode-cal');
 const timeInput = $('ztime');
 const resolvedEl = $('resolved');
 const zoneInput = $('zone-input');
@@ -293,28 +305,48 @@ function renderTimeline() {
 }
 
 function computeAll() {
-  const doy = T.parseJulianDay(state.doy);
   const tm = T.parseTimeHHMM(state.time);
-  doyInput.classList.toggle('invalid', state.doy.trim() !== '' && doy === null);
   timeInput.classList.toggle('invalid', state.time.trim() !== '' && tm === null);
   takeoffMs = null;
-  if (doy !== null && tm !== null) {
-    const year = T.resolveJulianYear(doy, Date.now());
-    if (year === null) {
-      resolvedEl.textContent = `Day ${doy} doesn't exist in the coming years.`;
-      resolvedEl.className = 'resolved warn';
-    } else {
-      takeoffMs = T.makeUtcInstant(year, doy, tm.h, tm.m);
+  let resolvedText = null;
+  let resolvedClass = 'resolved';
+
+  if (state.dateMode === 'calendar') {
+    doyInput.classList.remove('invalid');
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(state.calDate);
+    if (m && tm !== null) {
+      takeoffMs = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), tm.h, tm.m);
       const p = T.zonedParts(takeoffMs, 'UTC');
-      const rolled = year !== new Date().getUTCFullYear();
-      resolvedEl.textContent =
-        `Takeoff ${p.hhmm}Z on ${p.weekday} ${p.day} ${p.month} ${p.year}${rolled ? ' (next year)' : ''}`;
-      resolvedEl.className = rolled ? 'resolved warn' : 'resolved';
+      resolvedText =
+        `Takeoff ${p.hhmm}Z on ${p.weekday} ${p.day} ${p.month} ${p.year} (Day ${T.dayOfYearUtc(takeoffMs)})`;
     }
   } else {
-    resolvedEl.textContent = 'Enter Julian day and Zulu time…';
-    resolvedEl.className = 'resolved empty';
+    const doy = T.parseJulianDay(state.doy);
+    doyInput.classList.toggle('invalid', state.doy.trim() !== '' && doy === null);
+    if (doy !== null && tm !== null) {
+      const year = T.resolveJulianYear(doy, Date.now());
+      if (year === null) {
+        resolvedText = `Day ${doy} doesn't exist in the coming years.`;
+        resolvedClass = 'resolved warn';
+      } else {
+        takeoffMs = T.makeUtcInstant(year, doy, tm.h, tm.m);
+        const p = T.zonedParts(takeoffMs, 'UTC');
+        const rolled = year !== new Date().getUTCFullYear();
+        resolvedText =
+          `Takeoff ${p.hhmm}Z on ${p.weekday} ${p.day} ${p.month} ${p.year}${rolled ? ' (next year)' : ''}`;
+        resolvedClass = rolled ? 'resolved warn' : 'resolved';
+      }
+    }
   }
+
+  if (resolvedText === null) {
+    resolvedText = state.dateMode === 'calendar'
+      ? 'Pick a date and enter Zulu time…'
+      : 'Enter Julian day and Zulu time…';
+    resolvedClass = 'resolved empty';
+  }
+  resolvedEl.textContent = resolvedText;
+  resolvedEl.className = resolvedClass;
   if (document.activeElement !== zoneInput) {
     zoneInput.value = zoneDisplayValue();
     zoneInput.scrollLeft = 0;
@@ -357,6 +389,24 @@ function setZone(zone) {
   computeAll();
   zoneInput.value = zoneDisplayValue();
   zoneInput.scrollLeft = 0;
+}
+
+function updateModeUI() {
+  const cal = state.dateMode === 'calendar';
+  doyInput.hidden = cal;
+  calInput.hidden = !cal;
+  modeJulianBtn.classList.toggle('active', !cal);
+  modeCalBtn.classList.toggle('active', cal);
+}
+
+function setDateMode(mode) {
+  state.dateMode = mode;
+  saveState();
+  updateModeUI();
+  computeAll();
+  if (mode === 'calendar' && typeof calInput.showPicker === 'function') {
+    try { calInput.showPicker(); } catch { /* not allowed outside a gesture */ }
+  }
 }
 
 function commitZone() {
@@ -457,16 +507,25 @@ function closeEditor() {
 function init() {
   $('version').textContent = VERSION;
   doyInput.value = state.doy;
+  calInput.value = state.calDate;
   timeInput.value = state.time;
   deviceBtn.disabled = state.zone === deviceZone;
   buildZoneIndex();
   renderTemplateSelect();
+  updateModeUI();
 
   doyInput.addEventListener('input', () => {
     state.doy = doyInput.value;
     saveState();
     computeAll();
   });
+  calInput.addEventListener('input', () => {
+    state.calDate = calInput.value;
+    saveState();
+    computeAll();
+  });
+  modeJulianBtn.addEventListener('click', () => setDateMode('julian'));
+  modeCalBtn.addEventListener('click', () => setDateMode('calendar'));
   timeInput.addEventListener('input', () => {
     state.time = timeInput.value;
     saveState();

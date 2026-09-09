@@ -7,7 +7,7 @@
 <meta name="description" content="Convert Julian day + Zulu takeoff times into local event timelines for flight crews.">
 <meta name="theme-color" content="#0b0e13">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%230b0e13'/%3E%3Ctext%20x='32'%20y='46'%20font-size='38'%20font-family='monospace'%20font-weight='bold'%20text-anchor='middle'%20fill='%23f5b83d'%3EZ%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=0.2.1">
 </head>
 <body>
 <header>
@@ -18,12 +18,18 @@
   <section class="card">
     <h2>Takeoff</h2>
     <div class="inputs-row">
-      <label>Julian day
+      <div class="input-group">
+        <div class="input-top mode-toggle">
+          <button id="mode-julian" type="button">Julian day</button>
+          <button id="mode-cal" type="button">Calendar</button>
+        </div>
         <input id="doy" inputmode="numeric" placeholder="254" maxlength="3" autocomplete="off">
-      </label>
-      <label>Zulu time
+        <input id="caldate" type="date" hidden>
+      </div>
+      <div class="input-group">
+        <div class="input-top"><span>Zulu time</span></div>
         <input id="ztime" inputmode="numeric" placeholder="0530" maxlength="5" autocomplete="off">
-      </label>
+      </div>
     </div>
   </section>
 
@@ -96,6 +102,6 @@
   <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues" target="_blank" rel="noopener">Report an issue</a> &middot;
   <span>All times are computed on your device. No data is shared over the internet.</span>
 </footer>
-<script type="module" src="js/app.js"></script>
+<script type="module" src="js/app.js?v=0.2.1"></script>
 </body>
 </html>
