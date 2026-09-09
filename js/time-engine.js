@@ -74,23 +74,24 @@ export function makeUtcInstant(year, doy, h, m) {
   return Date.UTC(year, 0, doy, h, m); // day-of-month overflow normalizes doy
 }
 
-const partFormatters = new Map();
+const formatterCache = new Map();
 
-function formatterFor(zone) {
-  let f = partFormatters.get(zone);
+function formatterFor(zone, kind = 'parts') {
+  const key = `${kind}|${zone}`;
+  let f = formatterCache.get(key);
   if (!f) {
-    f = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone,
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      weekday: 'short',
-      timeZoneName: 'short',
-    });
-    partFormatters.set(zone, f);
+    const options = {
+      parts: {
+        timeZone: zone, hourCycle: 'h23',
+        year: 'numeric', month: 'short', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+        weekday: 'short', timeZoneName: 'short',
+      },
+      offset: { timeZone: zone, timeZoneName: 'shortOffset' },
+      long: { timeZone: zone, timeZoneName: 'long' },
+    }[kind];
+    f = new Intl.DateTimeFormat('en-US', options);
+    formatterCache.set(key, f);
   }
   return f;
 }
@@ -120,6 +121,34 @@ export function zonedParts(ms, zone) {
   };
 }
 
+// "America/New_York" → "New York"
+export function zoneLabel(zone) {
+  return zone.split('/').pop().replaceAll('_', ' ');
+}
+
+function timeZonePart(ms, zone, kind) {
+  const part = formatterFor(zone, kind).formatToParts(ms).find((p) => p.type === 'timeZoneName');
+  return part ? part.value : '';
+}
+
+// "UTC-4", "UTC+5:30", "UTC+0" — as of the given instant, so DST-correct.
+export function utcOffsetLabel(ms, zone) {
+  const raw = timeZonePart(ms, zone, 'offset');
+  return raw === 'GMT' ? 'UTC+0' : raw.replace('GMT', 'UTC');
+}
+
+// "Eastern Daylight Time", "Chamorro Standard Time"
+export function longZoneName(ms, zone) {
+  return timeZonePart(ms, zone, 'long');
+}
+
+// Short abbreviation when CLDR has one (EDT, CDT); city name when it
+// would only be a GMT offset (Pacific/Guam → "Guam").
+export function zoneDisplayName(ms, zone) {
+  const abbr = zonedParts(ms, zone).zoneAbbr;
+  return abbr.startsWith('GMT') || abbr.startsWith('UTC') ? zoneLabel(zone) : abbr;
+}
+
 // Plain-text timeline for pasting into messaging apps. Proportional fonts
 // mangle space-aligned columns, so lines are label-first and short.
 export function buildCopyText(takeoffMs, events, zones) {
@@ -129,7 +158,7 @@ export function buildCopyText(takeoffMs, events, zones) {
     `${z.hhmm}Z`,
     ...zones.map((zone) => {
       const p = zonedParts(takeoffMs, zone);
-      return `${p.hhmm} ${p.zoneAbbr}`;
+      return `${p.hhmm} ${zoneDisplayName(takeoffMs, zone)}`;
     }),
   ];
   const lines = [
@@ -147,7 +176,7 @@ export function buildCopyText(takeoffMs, events, zones) {
       const p = zonedParts(ms, zone);
       const tp = zonedParts(takeoffMs, zone);
       const flag = p.dateKey === tp.dateKey ? '' : ` (${p.weekday} ${Number(p.day)})`;
-      cols.push(`${p.hhmm} ${p.zoneAbbr}${flag}`);
+      cols.push(`${p.hhmm} ${zoneDisplayName(ms, zone)}${flag}`);
     }
     lines.push(`${ev.name.toUpperCase()}: ${cols.join(' / ')}`);
   }

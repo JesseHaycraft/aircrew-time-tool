@@ -30,10 +30,13 @@
   <section class="card">
     <h2>Local time zone</h2>
     <div class="zone-row">
-      <input id="zone-input" list="zone-list" autocomplete="off" spellcheck="false">
+      <div class="zone-input-wrap">
+        <input id="zone-input" autocomplete="off" spellcheck="false" placeholder="Search city, zone name, or abbreviation">
+        <div id="zone-suggest" class="zone-suggest" hidden></div>
+      </div>
       <button id="zone-device-btn" type="button" class="ghost">Device zone</button>
-      <datalist id="zone-list"></datalist>
     </div>
+    <p id="zone-offset" class="zone-offset"></p>
     <p class="hint">Zulu times convert to this zone &mdash; defaults to your device&rsquo;s zone.</p>
   </section>
 

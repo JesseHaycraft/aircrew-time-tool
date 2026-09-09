@@ -4,6 +4,7 @@ import {
   isLeapYear, daysInYear, dayOfYearUtc, parseTimeHHMM, parseJulianDay,
   parseOffset, offsetToHMM, resolveJulianYear, makeUtcInstant,
   zonedParts, isValidZone, buildCopyText,
+  zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName,
 } from '../js/time-engine.js';
 
 test('leap years', () => {
@@ -107,6 +108,26 @@ test('copy text: full timeline with day-change flags', () => {
     'BRIEF: 0230Z / 2230 EDT (THU 10)',
     'TAKEOFF: 0530Z / 0130 EDT',
   ].join('\n'));
+});
+
+test('zone names and UTC offsets', () => {
+  const june = Date.UTC(2026, 5, 15);
+  assert.equal(zoneLabel('America/New_York'), 'New York');
+  assert.equal(zoneLabel('Pacific/Guam'), 'Guam');
+  assert.equal(zoneDisplayName(june, 'America/New_York'), 'EDT');
+  assert.equal(zoneDisplayName(june, 'Pacific/Guam'), 'Guam'); // short name is only GMT+10
+  assert.equal(utcOffsetLabel(june, 'America/New_York'), 'UTC-4');
+  assert.equal(utcOffsetLabel(Date.UTC(2026, 0, 15), 'America/New_York'), 'UTC-5');
+  assert.equal(utcOffsetLabel(june, 'Asia/Kolkata'), 'UTC+5:30');
+  assert.equal(utcOffsetLabel(june, 'UTC'), 'UTC+0');
+  assert.equal(longZoneName(june, 'Pacific/Guam'), 'Chamorro Standard Time');
+});
+
+test('copy text uses zone names, never GMT offsets', () => {
+  const takeoff = makeUtcInstant(2026, 254, 5, 30);
+  const text = buildCopyText(takeoff, [{ name: 'Takeoff', offsetMin: 0 }], ['Pacific/Guam']);
+  assert.equal(text.split('\n')[0], 'T/O DAY 254 (FRI 11 SEP 26): 0530Z / 1530 Guam');
+  assert.equal(text.split('\n')[1], 'TAKEOFF: 0530Z / 1530 Guam');
 });
 
 test('copy text: Zulu rollover shows the Julian day', () => {
