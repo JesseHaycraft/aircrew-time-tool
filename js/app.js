@@ -1,6 +1,6 @@
 import * as T from './time-engine.js';
 
-const VERSION = 'v0.1.0';
+const VERSION = 'v0.1.1';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -41,8 +41,10 @@ const timeInput = $('ztime');
 const resolvedEl = $('resolved');
 const zoneChipsEl = $('zone-chips');
 const zoneAddInput = $('zone-add');
-const eventsHead = $('events-head');
-const eventsBody = $('events-body');
+const eventsEditor = $('events-editor');
+const timelineTable = $('timeline-table');
+const timelineHead = $('timeline-head');
+const timelineBody = $('timeline-body');
 const copyBtn = $('copy-btn');
 const shareBtn = $('share-btn');
 
@@ -78,56 +80,39 @@ function renderZoneChips() {
   }
 }
 
-function renderEventsTable() {
-  const headRow = document.createElement('tr');
-  headRow.append(th('Event'), th('Offset'), th('Z'));
-  for (const z of state.zones) {
-    const cell = th(zoneLabel(z));
-    cell.title = z;
-    headRow.append(cell);
-  }
-  headRow.append(th(''));
-  eventsHead.replaceChildren(headRow);
+function markOffsetValidity(input, value) {
+  input.classList.toggle('invalid', T.parseOffset(value) === null && value.trim() !== '');
+}
 
-  eventsBody.replaceChildren();
+function renderEventsEditor() {
+  eventsEditor.replaceChildren();
   state.events.forEach((ev, i) => {
-    const tr = document.createElement('tr');
+    const row = document.createElement('div');
+    row.className = 'ev-row';
 
-    const nameTd = document.createElement('td');
     const nameIn = document.createElement('input');
     nameIn.className = 'ev-name';
     nameIn.value = ev.name;
+    nameIn.placeholder = 'Event';
     nameIn.addEventListener('input', () => {
       ev.name = nameIn.value;
       saveState();
+      renderTimeline();
     });
-    nameTd.append(nameIn);
 
-    const offTd = document.createElement('td');
     const offIn = document.createElement('input');
     offIn.className = 'ev-offset';
     offIn.value = ev.offset;
     offIn.placeholder = '-0:30';
     offIn.autocomplete = 'off';
+    markOffsetValidity(offIn, ev.offset);
     offIn.addEventListener('input', () => {
       ev.offset = offIn.value;
       saveState();
-      computeRow(tr, ev);
+      markOffsetValidity(offIn, ev.offset);
+      renderTimeline();
     });
-    offTd.append(offIn);
 
-    tr.append(nameTd, offTd);
-
-    const zTd = document.createElement('td');
-    zTd.className = 'time-cell';
-    tr.append(zTd);
-    for (const z of state.zones) {
-      const td = document.createElement('td');
-      td.className = 'time-cell';
-      tr.append(td);
-    }
-
-    const delTd = document.createElement('td');
     const del = document.createElement('button');
     del.className = 'row-x';
     del.type = 'button';
@@ -138,35 +123,70 @@ function renderEventsTable() {
       saveState();
       renderAll();
     });
-    delTd.append(del);
-    tr.append(delTd);
 
-    eventsBody.append(tr);
+    row.append(nameIn, offIn, del);
+    eventsEditor.append(row);
   });
 }
 
-function computeRow(tr, ev) {
-  const offIn = tr.querySelector('.ev-offset');
-  const cells = tr.querySelectorAll('.time-cell');
-  const off = T.parseOffset(ev.offset);
-  offIn.classList.toggle('invalid', off === null && ev.offset.trim() !== '');
-  if (takeoffMs === null || off === null) {
-    cells.forEach((c) => { c.textContent = '—'; });
+// Valid events sorted by offset — the same set and order the copy text uses.
+function timelineEvents() {
+  return state.events
+    .map((e) => ({ name: e.name.trim() || 'Event', offsetMin: T.parseOffset(e.offset) }))
+    .filter((e) => e.offsetMin !== null)
+    .sort((a, b) => a.offsetMin - b.offsetMin);
+}
+
+function renderTimeline() {
+  copyBtn.disabled = takeoffMs === null;
+  shareBtn.disabled = takeoffMs === null;
+  if (takeoffMs === null) {
+    timelineTable.hidden = true;
     return;
   }
-  const ms = takeoffMs + off * 60_000;
-  const evZ = T.zonedParts(ms, 'UTC');
-  const evDoy = T.dayOfYearUtc(ms);
+  timelineTable.hidden = false;
+
+  const headRow = document.createElement('tr');
+  headRow.append(th('Event'), th('Z'));
+  for (const z of state.zones) {
+    const cell = th(zoneLabel(z));
+    cell.title = z;
+    headRow.append(cell);
+  }
+  timelineHead.replaceChildren(headRow);
+
   const toDoy = T.dayOfYearUtc(takeoffMs);
-  cells[0].textContent = evDoy === toDoy
-    ? `${evZ.hhmm}Z`
-    : `${String(evDoy).padStart(3, '0')}/${evZ.hhmm}Z`;
-  state.zones.forEach((z, idx) => {
-    const p = T.zonedParts(ms, z);
-    const tp = T.zonedParts(takeoffMs, z);
-    const flag = p.dateKey === tp.dateKey ? '' : ` (${p.weekday} ${Number(p.day)})`;
-    cells[idx + 1].textContent = `${p.hhmm}${flag}`;
-  });
+  timelineBody.replaceChildren();
+  for (const ev of timelineEvents()) {
+    const ms = takeoffMs + ev.offsetMin * 60_000;
+    const tr = document.createElement('tr');
+
+    const nameTd = document.createElement('td');
+    nameTd.className = 'tl-name';
+    nameTd.textContent = ev.name;
+    tr.append(nameTd);
+
+    const zp = T.zonedParts(ms, 'UTC');
+    const evDoy = T.dayOfYearUtc(ms);
+    const zTd = document.createElement('td');
+    zTd.className = 'time-cell';
+    zTd.textContent = evDoy === toDoy
+      ? `${zp.hhmm}Z`
+      : `${String(evDoy).padStart(3, '0')}/${zp.hhmm}Z`;
+    tr.append(zTd);
+
+    for (const z of state.zones) {
+      const p = T.zonedParts(ms, z);
+      const tp = T.zonedParts(takeoffMs, z);
+      const td = document.createElement('td');
+      td.className = 'time-cell';
+      td.textContent = p.dateKey === tp.dateKey
+        ? p.hhmm
+        : `${p.hhmm} (${p.weekday} ${Number(p.day)})`;
+      tr.append(td);
+    }
+    timelineBody.append(tr);
+  }
 }
 
 function computeAll() {
@@ -175,39 +195,34 @@ function computeAll() {
   doyInput.classList.toggle('invalid', state.doy.trim() !== '' && doy === null);
   timeInput.classList.toggle('invalid', state.time.trim() !== '' && tm === null);
   takeoffMs = null;
-  resolvedEl.classList.remove('warn');
   if (doy !== null && tm !== null) {
     const year = T.resolveJulianYear(doy, Date.now());
     if (year === null) {
       resolvedEl.textContent = `Day ${doy} doesn't exist in the coming years.`;
-      resolvedEl.classList.add('warn');
+      resolvedEl.className = 'resolved warn';
     } else {
       takeoffMs = T.makeUtcInstant(year, doy, tm.h, tm.m);
       const p = T.zonedParts(takeoffMs, 'UTC');
       const rolled = year !== new Date().getUTCFullYear();
       resolvedEl.textContent =
         `${p.weekday} ${p.day} ${p.month} ${p.year} — takeoff ${p.hhmm}Z${rolled ? ' (next year)' : ''}`;
-      resolvedEl.classList.toggle('warn', rolled);
+      resolvedEl.className = rolled ? 'resolved warn' : 'resolved';
     }
   } else {
     resolvedEl.textContent = 'Enter Julian day and Zulu time…';
+    resolvedEl.className = 'resolved empty';
   }
-  [...eventsBody.children].forEach((tr, i) => computeRow(tr, state.events[i]));
-  copyBtn.disabled = takeoffMs === null;
-  shareBtn.disabled = takeoffMs === null;
+  renderTimeline();
 }
 
 function renderAll() {
   renderZoneChips();
-  renderEventsTable();
+  renderEventsEditor();
   computeAll();
 }
 
 function currentCopyText() {
-  const events = state.events
-    .map((e) => ({ name: e.name.trim() || 'EVENT', offsetMin: T.parseOffset(e.offset) }))
-    .filter((e) => e.offsetMin !== null);
-  return T.buildCopyText(takeoffMs, events, state.zones);
+  return T.buildCopyText(takeoffMs, timelineEvents(), state.zones);
 }
 
 function flash(btn, msg) {

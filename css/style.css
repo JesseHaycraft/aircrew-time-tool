@@ -8,6 +8,7 @@
   --accent-ink: #1a1200;
   --danger: #e5534b;
   --warn: #f0883e;
+  --results-bg: #10161f;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
@@ -43,6 +44,13 @@ main { max-width: 780px; margin: 0 auto; padding: 12px 16px 32px; }
 .hint { color: var(--muted); font-size: 0.85rem; margin: 12px 0 0; }
 .hint code { font-family: var(--mono); }
 
+/* ---- results card: visually distinct from the input cards above it ---- */
+.card.results {
+  background: var(--results-bg);
+  border-left: 3px solid var(--accent);
+}
+.card.results h2 { color: var(--accent); }
+
 input, button {
   font: inherit;
   color: inherit;
@@ -67,8 +75,14 @@ input.invalid { border-color: var(--danger); }
   width: 100%;
 }
 
-.resolved { font-family: var(--mono); margin: 14px 0 0; color: var(--accent); }
+.resolved {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  margin: 0 0 12px;
+  color: var(--accent);
+}
 .resolved.warn { color: var(--warn); }
+.resolved.empty { color: var(--muted); font-family: inherit; font-size: 0.95rem; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .chip {
@@ -94,11 +108,30 @@ button.primary {
   border-color: var(--accent); font-weight: 600;
 }
 button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ---- events editor (input) ---- */
+.ev-head {
+  display: flex; gap: 8px; padding: 0 2px 6px;
+  color: var(--muted); font-size: 0.75rem;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.ev-head .h-name { flex: 1; }
+.ev-head .h-off { width: 84px; }
+.ev-head .h-sp { width: 28px; }
+
+.events-editor { display: flex; flex-direction: column; gap: 8px; }
+.ev-row { display: flex; gap: 8px; align-items: center; }
+.ev-row .ev-name { flex: 1; min-width: 0; }
+.ev-row .ev-offset { width: 84px; font-family: var(--mono); flex-shrink: 0; }
+
+.row-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+/* ---- timeline (results) ---- */
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
 th, td {
-  text-align: left; padding: 8px 10px;
+  text-align: left; padding: 9px 10px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
@@ -108,11 +141,9 @@ th {
 }
 tbody tr:last-child td { border-bottom: none; }
 .time-cell { font-family: var(--mono); }
-.ev-name { width: 140px; }
-.ev-offset { width: 84px; font-family: var(--mono); }
+.tl-name { color: var(--muted); }
 
-.row-actions { display: flex; gap: 8px; margin-top: 12px; }
-.actions { display: flex; gap: 12px; margin-top: 20px; }
+.actions { display: flex; gap: 12px; margin-top: 16px; }
 .actions button { flex: 1; padding: 14px; font-size: 1.05rem; }
 
 footer {
