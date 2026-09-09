@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aircrew Time Tool</title>
+<meta name="description" content="Convert Julian day + Zulu takeoff times into local event timelines for flight crews.">
+<meta name="theme-color" content="#0b0e13">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%230b0e13'/%3E%3Ctext%20x='32'%20y='46'%20font-size='38'%20font-family='monospace'%20font-weight='bold'%20text-anchor='middle'%20fill='%23f5b83d'%3EZ%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1>Aircrew Time Tool</h1>
+  <p class="subtitle">Julian day + Zulu in &rarr; local event times out</p>
+</header>
+<main>
+  <section class="card">
+    <h2>Takeoff</h2>
+    <div class="inputs-row">
+      <label>Julian day
+        <input id="doy" inputmode="numeric" placeholder="254" maxlength="3" autocomplete="off">
+      </label>
+      <label>Zulu time
+        <input id="ztime" inputmode="numeric" placeholder="0530" maxlength="5" autocomplete="off">
+      </label>
+    </div>
+    <p id="resolved" class="resolved">Enter Julian day and Zulu time&hellip;</p>
+  </section>
+
+  <section class="card">
+    <h2>Local time zones</h2>
+    <div id="zone-chips" class="chips"></div>
+    <div class="zone-add-row">
+      <input id="zone-add" list="zone-list" placeholder="Add zone (e.g. America/New_York)" autocomplete="off">
+      <button id="zone-add-btn" type="button">Add</button>
+      <datalist id="zone-list"></datalist>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Events</h2>
+    <div class="table-wrap">
+      <table id="events-table">
+        <thead id="events-head"></thead>
+        <tbody id="events-body"></tbody>
+      </table>
+    </div>
+    <div class="row-actions">
+      <button id="add-event" type="button">+ Add event</button>
+      <button id="reset-events" type="button" class="ghost">Reset to defaults</button>
+    </div>
+    <p class="hint">Offsets are relative to takeoff: <code>-2:30</code> = 2&nbsp;h 30&nbsp;min before, plain numbers are minutes.</p>
+  </section>
+
+  <div class="actions">
+    <button id="copy-btn" class="primary" type="button" disabled>Copy times</button>
+    <button id="share-btn" type="button">Share&hellip;</button>
+  </div>
+</main>
+<footer>
+  <span id="version"></span> &middot;
+  <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues" target="_blank" rel="noopener">Report an issue</a> &middot;
+  <span>All times are computed on your device</span>
+</footer>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
