@@ -1,9 +1,9 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.2.1';
+import * as T from './time-engine.js?v=0.2.2';
 
-const VERSION = 'v0.2.1';
+const VERSION = 'v0.2.2';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -102,8 +102,15 @@ const shareBtn = $('share-btn');
 const deviceBtn = $('zone-device-btn');
 const tplSelect = $('tpl-select');
 const tplOverlay = $('tpl-overlay');
+const tplListView = $('tpl-list-view');
+const tplEditorView = $('tpl-editor-view');
+const tplList = $('tpl-list');
 const tplName = $('tpl-name');
 const tplEvents = $('tpl-events');
+
+// Which template the overlay's editor is showing — independent of the
+// active (in-use) template, which only the main-page select changes.
+let editingTemplateId = null;
 
 // ---- zone search index --------------------------------------------------
 // Every zone is searchable by IANA id, city, long standard/daylight names,
@@ -296,8 +303,8 @@ function renderTimeline() {
     const localTd = document.createElement('td');
     localTd.className = 'time-cell';
     localTd.textContent = p.dateKey === takeoffLocal.dateKey
-      ? p.hhmm
-      : `${p.hhmm} (${p.weekday} ${Number(p.day)})`;
+      ? `${p.hhmm}L`
+      : `${p.hhmm}L (${p.weekday} ${Number(p.day)})`;
     tr.append(localTd);
 
     timelineBody.append(tr);
@@ -333,7 +340,7 @@ function computeAll() {
         const p = T.zonedParts(takeoffMs, 'UTC');
         const rolled = year !== new Date().getUTCFullYear();
         resolvedText =
-          `Takeoff ${p.hhmm}Z on ${p.weekday} ${p.day} ${p.month} ${p.year}${rolled ? ' (next year)' : ''}`;
+          `Takeoff ${p.hhmm}Z on ${p.weekday} ${p.day} ${p.month} ${p.year} (Day ${doy}${rolled ? ', next year' : ''})`;
         resolvedClass = rolled ? 'resolved warn' : 'resolved';
       }
     }
@@ -436,8 +443,72 @@ function uniqueTemplateName(base) {
   return `${base} (${n})`;
 }
 
+function editingTemplate() {
+  return state.templates.find((t) => t.id === editingTemplateId) ?? activeTemplate();
+}
+
+function renderTemplateList() {
+  tplList.replaceChildren();
+  const lockDelete = state.templates.length === 1;
+  for (const t of state.templates) {
+    const item = document.createElement('div');
+    item.className = 'tpl-item';
+
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'tpl-item-main';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'tpl-item-name';
+    nameEl.textContent = t.name || 'Untitled';
+    const meta = document.createElement('span');
+    meta.className = 'tpl-item-meta';
+    const n = t.events.length;
+    meta.textContent =
+      `${n} event${n === 1 ? '' : 's'} + takeoff${t.id === state.activeTemplateId ? ' · in use' : ''}`;
+    main.append(nameEl, meta);
+    main.addEventListener('click', () => {
+      editingTemplateId = t.id;
+      showEditorView();
+    });
+
+    const dup = document.createElement('button');
+    dup.type = 'button';
+    dup.className = 'tpl-copy';
+    dup.textContent = 'Duplicate';
+    dup.addEventListener('click', () => {
+      state.templates.push({
+        id: newId(),
+        name: uniqueTemplateName(`${t.name} (copy)`),
+        events: t.events.map((e) => ({ ...e })),
+      });
+      saveState();
+      renderTemplateList();
+      renderTemplateSelect();
+    });
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'row-x';
+    del.textContent = '×';
+    del.title = lockDelete ? 'At least one template is required' : `Delete ${t.name}`;
+    del.disabled = lockDelete;
+    del.addEventListener('click', () => {
+      if (!window.confirm(`Delete template "${t.name}"?`)) return;
+      state.templates = state.templates.filter((x) => x.id !== t.id);
+      if (state.activeTemplateId === t.id) state.activeTemplateId = state.templates[0].id;
+      saveState();
+      renderTemplateList();
+      renderTemplateSelect();
+      computeAll();
+    });
+
+    item.append(main, dup, del);
+    tplList.append(item);
+  }
+}
+
 function renderTemplateEditor() {
-  const tpl = activeTemplate();
+  const tpl = editingTemplate();
   tplName.value = tpl.name;
   tplEvents.replaceChildren();
   tpl.events.forEach((ev, i) => {
@@ -491,13 +562,25 @@ function selectTemplate(id) {
   computeAll();
 }
 
-function openEditor() {
+function showListView() {
+  tplEditorView.hidden = true;
+  tplListView.hidden = false;
+  renderTemplateList();
+}
+
+function showEditorView() {
+  tplListView.hidden = true;
+  tplEditorView.hidden = false;
   renderTemplateEditor();
+}
+
+function openManager() {
+  showListView();
   tplOverlay.hidden = false;
   document.body.classList.add('no-scroll');
 }
 
-function closeEditor() {
+function closeManager() {
   tplOverlay.hidden = true;
   document.body.classList.remove('no-scroll');
   renderTemplateSelect();
@@ -558,19 +641,22 @@ function init() {
   deviceBtn.addEventListener('click', () => setZone(deviceZone));
 
   tplSelect.addEventListener('change', () => selectTemplate(tplSelect.value));
-  $('tpl-edit-btn').addEventListener('click', openEditor);
-  $('tpl-done').addEventListener('click', closeEditor);
+  $('tpl-manage-btn').addEventListener('click', openManager);
+  $('tpl-done').addEventListener('click', closeManager);
+  $('tpl-back').addEventListener('click', showListView);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !tplOverlay.hidden) closeEditor();
+    if (e.key !== 'Escape' || tplOverlay.hidden) return;
+    if (!tplEditorView.hidden) showListView();
+    else closeManager();
   });
 
   tplName.addEventListener('input', () => {
-    activeTemplate().name = tplName.value;
+    editingTemplate().name = tplName.value;
     saveState();
     renderTemplateSelect();
   });
   $('tpl-add-event').addEventListener('click', () => {
-    activeTemplate().events.push({ name: '', offset: '-1:00' });
+    editingTemplate().events.push({ name: '', offset: '-1:00' });
     saveState();
     renderTemplateEditor();
     computeAll();
@@ -578,34 +664,18 @@ function init() {
   $('tpl-new').addEventListener('click', () => {
     const tpl = { id: newId(), name: uniqueTemplateName('New template'), events: [] };
     state.templates.push(tpl);
-    selectTemplate(tpl.id);
-    renderTemplateEditor();
-  });
-  $('tpl-duplicate').addEventListener('click', () => {
-    const src = activeTemplate();
-    const tpl = {
-      id: newId(),
-      name: uniqueTemplateName(`${src.name} (copy)`),
-      events: src.events.map((e) => ({ ...e })),
-    };
-    state.templates.push(tpl);
-    selectTemplate(tpl.id);
-    renderTemplateEditor();
+    saveState();
+    renderTemplateSelect();
+    editingTemplateId = tpl.id;
+    showEditorView();
   });
   $('tpl-restore').addEventListener('click', () => {
     const tpl = makeDefaultTemplate();
     tpl.name = uniqueTemplateName(tpl.name);
     state.templates.push(tpl);
-    selectTemplate(tpl.id);
-    renderTemplateEditor();
-  });
-  $('tpl-delete').addEventListener('click', () => {
-    const tpl = activeTemplate();
-    if (!window.confirm(`Delete template "${tpl.name}"?`)) return;
-    state.templates = state.templates.filter((t) => t.id !== tpl.id);
-    if (!state.templates.length) state.templates.push(makeDefaultTemplate());
-    selectTemplate(state.templates[0].id);
-    renderTemplateEditor();
+    saveState();
+    renderTemplateList();
+    renderTemplateSelect();
   });
 
   copyBtn.addEventListener('click', async () => {

@@ -7,7 +7,7 @@
 <meta name="description" content="Convert Julian day + Zulu takeoff times into local event timelines for flight crews.">
 <meta name="theme-color" content="#0b0e13">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%230b0e13'/%3E%3Ctext%20x='32'%20y='46'%20font-size='38'%20font-family='monospace'%20font-weight='bold'%20text-anchor='middle'%20fill='%23f5b83d'%3EZ%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=0.2.1">
+<link rel="stylesheet" href="css/style.css?v=0.2.2">
 </head>
 <body>
 <header>
@@ -46,11 +46,11 @@
   </section>
 
   <section class="card results">
-    <h2>Timeline</h2>
+    <h2>Sequence of Events</h2>
     <div class="tpl-row">
       <label for="tpl-select">Template</label>
       <select id="tpl-select"></select>
-      <button id="tpl-edit-btn" type="button" class="ghost">Edit&hellip;</button>
+      <button id="tpl-manage-btn" type="button" class="ghost">Manage&hellip;</button>
     </div>
     <p id="resolved" class="resolved empty">Enter Julian day and Zulu time&hellip;</p>
     <div class="table-wrap">
@@ -68,32 +68,43 @@
 
 <div id="tpl-overlay" class="overlay" hidden>
   <div class="overlay-panel">
-    <div class="overlay-head">
-      <h2>Edit template</h2>
-      <button id="tpl-done" class="primary" type="button">Done</button>
+
+    <div id="tpl-list-view">
+      <div class="overlay-head">
+        <h2>Templates</h2>
+        <button id="tpl-done" class="primary" type="button">Done</button>
+      </div>
+      <div id="tpl-list" class="tpl-list"></div>
+      <div class="row-actions">
+        <button id="tpl-new" type="button">+ New template</button>
+        <button id="tpl-restore" type="button" class="ghost">Restore default</button>
+      </div>
+      <p class="hint">Tap a template to edit it. The template in use is picked on the main screen.</p>
     </div>
-    <div class="tpl-name-row">
-      <label>Template name
-        <input id="tpl-name" autocomplete="off">
-      </label>
+
+    <div id="tpl-editor-view" hidden>
+      <div class="overlay-head editor-head">
+        <button id="tpl-back" type="button" class="ghost">&lsaquo; Templates</button>
+        <h2>Edit template</h2>
+      </div>
+      <div class="tpl-name-row">
+        <label>Template name
+          <input id="tpl-name" autocomplete="off">
+        </label>
+      </div>
+      <div class="ev-head" aria-hidden="true">
+        <span class="h-name">Event</span>
+        <span class="h-off">Offset</span>
+        <span class="h-sp"></span>
+      </div>
+      <div id="tpl-events" class="tpl-events"></div>
+      <div class="tpl-takeoff-row">Takeoff <span class="mono">0:00</span> &mdash; always included</div>
+      <div class="row-actions">
+        <button id="tpl-add-event" type="button">+ Add event</button>
+      </div>
+      <p class="hint">Offsets are relative to takeoff: <code>-2:30</code> = 2&nbsp;h 30&nbsp;min before, plain numbers are minutes. Use <code>+</code> for after takeoff. Changes save automatically.</p>
     </div>
-    <div class="ev-head" aria-hidden="true">
-      <span class="h-name">Event</span>
-      <span class="h-off">Offset</span>
-      <span class="h-sp"></span>
-    </div>
-    <div id="tpl-events" class="tpl-events"></div>
-    <div class="tpl-takeoff-row">Takeoff <span class="mono">0:00</span> &mdash; always included</div>
-    <div class="row-actions">
-      <button id="tpl-add-event" type="button">+ Add event</button>
-    </div>
-    <p class="hint">Offsets are relative to takeoff: <code>-2:30</code> = 2&nbsp;h 30&nbsp;min before, plain numbers are minutes. Use <code>+</code> for after takeoff.</p>
-    <div class="row-actions tpl-manage-actions">
-      <button id="tpl-new" type="button">New</button>
-      <button id="tpl-duplicate" type="button">Duplicate</button>
-      <button id="tpl-restore" type="button" class="ghost">Restore default</button>
-      <button id="tpl-delete" type="button" class="danger">Delete</button>
-    </div>
+
   </div>
 </div>
 
@@ -102,6 +113,6 @@
   <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues" target="_blank" rel="noopener">Report an issue</a> &middot;
   <span>All times are computed on your device. No data is shared over the internet.</span>
 </footer>
-<script type="module" src="js/app.js?v=0.2.1"></script>
+<script type="module" src="js/app.js?v=0.2.2"></script>
 </body>
 </html>
