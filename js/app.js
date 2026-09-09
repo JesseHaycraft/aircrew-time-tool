@@ -1,6 +1,6 @@
 import * as T from './time-engine.js';
 
-const VERSION = 'v0.1.4';
+const VERSION = 'v0.1.5';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -44,7 +44,6 @@ const doyInput = $('doy');
 const timeInput = $('ztime');
 const resolvedEl = $('resolved');
 const zoneInput = $('zone-input');
-const zoneOffsetEl = $('zone-offset');
 const suggestEl = $('zone-suggest');
 const timelineTable = $('timeline-table');
 const timelineHead = $('timeline-head');
@@ -264,10 +263,17 @@ function computeAll() {
     resolvedEl.textContent = 'Enter Julian day and Zulu time…';
     resolvedEl.className = 'resolved empty';
   }
-  zoneOffsetEl.textContent = takeoffMs !== null
-    ? `${T.utcOffsetLabel(takeoffMs, state.zone)} at takeoff`
-    : T.utcOffsetLabel(Date.now(), state.zone);
+  if (document.activeElement !== zoneInput) {
+    zoneInput.value = zoneDisplayValue();
+    zoneInput.scrollLeft = 0;
+  }
   renderTimeline();
+}
+
+// The input shows the zone with its UTC offset, e.g. "Pacific/Guam UTC+10",
+// computed at the takeoff instant when one is set so it's DST-correct.
+function zoneDisplayValue() {
+  return `${state.zone} ${T.utcOffsetLabel(takeoffMs ?? Date.now(), state.zone)}`;
 }
 
 function currentCopyText() {
@@ -294,10 +300,11 @@ function fallbackCopy(text) {
 function setZone(zone) {
   state.zone = zone;
   saveState();
-  zoneInput.value = zone;
   zoneInput.classList.remove('invalid');
   deviceBtn.disabled = zone === deviceZone;
   computeAll();
+  zoneInput.value = zoneDisplayValue();
+  zoneInput.scrollLeft = 0;
 }
 
 function commitZone() {
@@ -307,7 +314,7 @@ function commitZone() {
   } else {
     zoneInput.classList.add('invalid');
     setTimeout(() => {
-      zoneInput.value = state.zone;
+      zoneInput.value = zoneDisplayValue();
       zoneInput.classList.remove('invalid');
     }, 900);
   }
@@ -317,7 +324,6 @@ function init() {
   $('version').textContent = VERSION;
   doyInput.value = state.doy;
   timeInput.value = state.time;
-  zoneInput.value = state.zone;
   deviceBtn.disabled = state.zone === deviceZone;
   buildZoneIndex();
 
@@ -341,7 +347,7 @@ function init() {
   zoneInput.addEventListener('blur', () => {
     setTimeout(() => {
       hideSuggest();
-      if (zoneInput.value.trim() !== state.zone) commitZone();
+      if (zoneInput.value.trim() !== zoneDisplayValue()) commitZone();
     }, 150);
   });
   zoneInput.addEventListener('keydown', (e) => {

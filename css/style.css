@@ -6,6 +6,7 @@
   --muted: #8b95a6;
   --accent: #f5b83d;
   --accent-ink: #1a1200;
+  --bright: #ffffff;
   --danger: #e5534b;
   --warn: #f0883e;
   --results-bg: #10161f;
@@ -58,7 +59,9 @@ input, button {
   border: 1px solid var(--border);
   background: #0f141c;
 }
-input { padding: 10px 12px; }
+/* user input is amber; calculated output is bright white */
+input { padding: 10px 12px; color: var(--accent); }
+input::placeholder { color: var(--muted); opacity: 1; }
 input:focus { outline: none; border-color: var(--accent); }
 input.invalid { border-color: var(--danger); }
 
@@ -79,7 +82,7 @@ input.invalid { border-color: var(--danger); }
   font-family: var(--mono);
   font-size: 1.05rem;
   margin: 0 0 12px;
-  color: var(--accent);
+  color: var(--bright);
 }
 .resolved.warn { color: var(--warn); }
 .resolved.empty { color: var(--muted); font-family: inherit; font-size: 0.95rem; }
@@ -106,8 +109,6 @@ input.invalid { border-color: var(--danger); }
 .zs-id { display: block; font-family: var(--mono); font-size: 0.95rem; }
 .zs-meta { display: block; color: var(--muted); font-size: 0.8rem; }
 
-.zone-offset { font-family: var(--mono); font-size: 0.95rem; margin: 10px 0 0; }
-
 button { cursor: pointer; padding: 10px 14px; background: #1c2432; }
 button:hover { border-color: var(--accent); }
 button.ghost { background: transparent; }
@@ -131,9 +132,9 @@ th {
   letter-spacing: 0.08em; color: var(--muted);
 }
 tbody tr:last-child td { border-bottom: none; }
-.time-cell { font-family: var(--mono); }
-.tl-name { color: var(--muted); }
-.tl-off { font-family: var(--mono); font-size: 0.8rem; opacity: 0.75; }
+.time-cell { font-family: var(--mono); color: var(--bright); }
+.tl-name { color: var(--bright); }
+.tl-off { font-family: var(--mono); font-size: 0.8rem; color: var(--bright); opacity: 0.6; }
 
 .actions { display: flex; gap: 12px; margin-top: 16px; }
 .actions button { flex: 1; padding: 14px; font-size: 1.05rem; }
