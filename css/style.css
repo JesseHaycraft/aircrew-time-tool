@@ -113,6 +113,7 @@ th {
 tbody tr:last-child td { border-bottom: none; }
 .time-cell { font-family: var(--mono); }
 .tl-name { color: var(--muted); }
+.tl-off { font-family: var(--mono); font-size: 0.8rem; opacity: 0.75; }
 
 .actions { display: flex; gap: 12px; margin-top: 16px; }
 .actions button { flex: 1; padding: 14px; font-size: 1.05rem; }

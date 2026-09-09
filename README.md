@@ -6,7 +6,7 @@ A one-screen utility for flight crews: take the Julian day + Zulu takeoff time f
 
 ## Status
 
-v0.1.2 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
+v0.1.3 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
 
 ## Features (v0.1)
 

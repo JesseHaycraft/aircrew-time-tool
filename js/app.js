@@ -1,6 +1,6 @@
 import * as T from './time-engine.js';
 
-const VERSION = 'v0.1.2';
+const VERSION = 'v0.1.3';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -49,10 +49,7 @@ const timelineHead = $('timeline-head');
 const timelineBody = $('timeline-body');
 const copyBtn = $('copy-btn');
 const shareBtn = $('share-btn');
-
-function zoneLabel(zone) {
-  return zone.split('/').pop().replaceAll('_', ' ');
-}
+const deviceBtn = $('zone-device-btn');
 
 function th(text) {
   const el = document.createElement('th');
@@ -71,9 +68,9 @@ function renderTimeline() {
 
   const headRow = document.createElement('tr');
   headRow.append(th('Event'), th('Z'));
-  const zoneCell = th(zoneLabel(state.zone));
-  zoneCell.title = state.zone;
-  headRow.append(zoneCell);
+  const localCell = th('Local');
+  localCell.title = state.zone;
+  headRow.append(localCell);
   timelineHead.replaceChildren(headRow);
 
   const toDoy = T.dayOfYearUtc(takeoffMs);
@@ -85,7 +82,11 @@ function renderTimeline() {
 
     const nameTd = document.createElement('td');
     nameTd.className = 'tl-name';
-    nameTd.textContent = ev.name;
+    nameTd.append(`${ev.name} `);
+    const offSpan = document.createElement('span');
+    offSpan.className = 'tl-off';
+    offSpan.textContent = `(${ev.offsetMin === 0 ? '-0:00' : T.offsetToHMM(ev.offsetMin)})`;
+    nameTd.append(offSpan);
     tr.append(nameTd);
 
     const zp = T.zonedParts(ms, 'UTC');
@@ -125,7 +126,7 @@ function computeAll() {
       const p = T.zonedParts(takeoffMs, 'UTC');
       const rolled = year !== new Date().getUTCFullYear();
       resolvedEl.textContent =
-        `${p.weekday} ${p.day} ${p.month} ${p.year} — takeoff ${p.hhmm}Z${rolled ? ' (next year)' : ''}`;
+        `Takeoff ${p.hhmm}Z on ${p.weekday} ${p.day} ${p.month} ${p.year}${rolled ? ' (next year)' : ''}`;
       resolvedEl.className = rolled ? 'resolved warn' : 'resolved';
     }
   } else {
@@ -161,6 +162,7 @@ function setZone(zone) {
   saveState();
   zoneInput.value = zone;
   zoneInput.classList.remove('invalid');
+  deviceBtn.disabled = zone === deviceZone;
   computeAll();
 }
 
@@ -213,7 +215,8 @@ function init() {
       zoneInput.blur();
     }
   });
-  $('zone-device-btn').addEventListener('click', () => setZone(deviceZone));
+  deviceBtn.addEventListener('click', () => setZone(deviceZone));
+  deviceBtn.disabled = state.zone === deviceZone;
 
   copyBtn.addEventListener('click', async () => {
     if (takeoffMs === null) return;
