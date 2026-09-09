@@ -1,42 +1,79 @@
 import * as T from './time-engine.js';
 
-const VERSION = 'v0.1.6';
+const VERSION = 'v0.2.0';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-// Standard timeline, fixed until user-editable templates land.
-const EVENTS = [
-  { name: 'Stop drink', offsetMin: -720 }, // T-12:00
-  { name: 'LFA', offsetMin: -255 },        // T-4:15
-  { name: 'Bus', offsetMin: -195 },        // T-3:15
-  { name: 'Takeoff', offsetMin: 0 },
+const DEFAULT_TEMPLATE_EVENTS = [
+  { name: 'Stop drink', offset: '-12:00' },
+  { name: 'LFA', offset: '-4:15' },
+  { name: 'Bus', offset: '-3:15' },
 ];
+
+const newId = () => (crypto.randomUUID
+  ? crypto.randomUUID()
+  : `id-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+function makeDefaultTemplate() {
+  return { id: newId(), name: 'Standard', events: DEFAULT_TEMPLATE_EVENTS.map((e) => ({ ...e })) };
+}
 
 let state = loadState();
 let takeoffMs = null;
 
+function sanitizeTemplates(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const t of raw) {
+    if (!t || typeof t.name !== 'string' || !Array.isArray(t.events)) continue;
+    out.push({
+      id: typeof t.id === 'string' ? t.id : newId(),
+      name: t.name,
+      events: t.events
+        .filter((e) => e && typeof e.name === 'string' && typeof e.offset === 'string')
+        .map((e) => ({ name: e.name, offset: e.offset })),
+    });
+  }
+  return out;
+}
+
 function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const s = JSON.parse(raw);
-      // Older versions stored a zones array; keep the first entry.
-      const zone =
-        typeof s.zone === 'string' && T.isValidZone(s.zone) ? s.zone
-        : Array.isArray(s.zones) && s.zones.length && T.isValidZone(s.zones[0]) ? s.zones[0]
-        : deviceZone;
-      return {
-        doy: typeof s.doy === 'string' ? s.doy : '',
-        time: typeof s.time === 'string' ? s.time : '',
-        zone,
-      };
-    }
-  } catch { /* corrupted state falls through to defaults */ }
-  return { doy: '', time: '', zone: deviceZone };
+  let s = {};
+  try { s = JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? {}; } catch { /* corrupted */ }
+  // Older versions stored a zones array; keep the first entry.
+  const zone =
+    typeof s.zone === 'string' && T.isValidZone(s.zone) ? s.zone
+    : Array.isArray(s.zones) && s.zones.length && T.isValidZone(s.zones[0]) ? s.zones[0]
+    : deviceZone;
+  const templates = sanitizeTemplates(s.templates);
+  if (!templates.length) templates.push(makeDefaultTemplate());
+  const activeTemplateId = templates.some((t) => t.id === s.activeTemplateId)
+    ? s.activeTemplateId
+    : templates[0].id;
+  return {
+    doy: typeof s.doy === 'string' ? s.doy : '',
+    time: typeof s.time === 'string' ? s.time : '',
+    zone,
+    templates,
+    activeTemplateId,
+  };
 }
 
 function saveState() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* private mode */ }
+}
+
+function activeTemplate() {
+  return state.templates.find((t) => t.id === state.activeTemplateId) ?? state.templates[0];
+}
+
+// Active template's valid events plus the always-included takeoff, sorted.
+function timelineEvents() {
+  const events = activeTemplate().events
+    .map((e) => ({ name: e.name.trim() || 'Event', offsetMin: T.parseOffset(e.offset) }))
+    .filter((e) => e.offsetMin !== null);
+  events.push({ name: 'Takeoff', offsetMin: 0 });
+  return events.sort((a, b) => a.offsetMin - b.offsetMin);
 }
 
 const $ = (id) => document.getElementById(id);
@@ -51,6 +88,10 @@ const timelineBody = $('timeline-body');
 const copyBtn = $('copy-btn');
 const shareBtn = $('share-btn');
 const deviceBtn = $('zone-device-btn');
+const tplSelect = $('tpl-select');
+const tplOverlay = $('tpl-overlay');
+const tplName = $('tpl-name');
+const tplEvents = $('tpl-events');
 
 // ---- zone search index --------------------------------------------------
 // Every zone is searchable by IANA id, city, long standard/daylight names,
@@ -187,6 +228,17 @@ function th(text) {
   return el;
 }
 
+function renderTemplateSelect() {
+  tplSelect.replaceChildren();
+  for (const t of state.templates) {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.name || 'Untitled';
+    opt.selected = t.id === state.activeTemplateId;
+    tplSelect.append(opt);
+  }
+}
+
 function renderTimeline() {
   copyBtn.disabled = takeoffMs === null;
   shareBtn.disabled = takeoffMs === null;
@@ -206,7 +258,7 @@ function renderTimeline() {
   const toDoy = T.dayOfYearUtc(takeoffMs);
   const takeoffLocal = T.zonedParts(takeoffMs, state.zone);
   timelineBody.replaceChildren();
-  for (const ev of EVENTS) {
+  for (const ev of timelineEvents()) {
     const ms = takeoffMs + ev.offsetMin * 60_000;
     const tr = document.createElement('tr');
 
@@ -277,7 +329,7 @@ function zoneDisplayValue() {
 }
 
 function currentCopyText() {
-  return T.buildCopyText(takeoffMs, EVENTS, [state.zone]);
+  return T.buildCopyText(takeoffMs, timelineEvents(), [state.zone]);
 }
 
 function flash(btn, msg) {
@@ -320,12 +372,95 @@ function commitZone() {
   }
 }
 
+// ---- template editor ----------------------------------------------------
+
+function markOffsetValidity(input, value) {
+  input.classList.toggle('invalid', T.parseOffset(value) === null && value.trim() !== '');
+}
+
+function uniqueTemplateName(base) {
+  const names = new Set(state.templates.map((t) => t.name));
+  if (!names.has(base)) return base;
+  let n = 2;
+  while (names.has(`${base} (${n})`)) n++;
+  return `${base} (${n})`;
+}
+
+function renderTemplateEditor() {
+  const tpl = activeTemplate();
+  tplName.value = tpl.name;
+  tplEvents.replaceChildren();
+  tpl.events.forEach((ev, i) => {
+    const row = document.createElement('div');
+    row.className = 'ev-row';
+
+    const nameIn = document.createElement('input');
+    nameIn.className = 'ev-name';
+    nameIn.value = ev.name;
+    nameIn.placeholder = 'Event';
+    nameIn.addEventListener('input', () => {
+      ev.name = nameIn.value;
+      saveState();
+      computeAll();
+    });
+
+    const offIn = document.createElement('input');
+    offIn.className = 'ev-offset';
+    offIn.value = ev.offset;
+    offIn.placeholder = '-0:30';
+    offIn.autocomplete = 'off';
+    markOffsetValidity(offIn, ev.offset);
+    offIn.addEventListener('input', () => {
+      ev.offset = offIn.value;
+      saveState();
+      markOffsetValidity(offIn, ev.offset);
+      computeAll();
+    });
+
+    const del = document.createElement('button');
+    del.className = 'row-x';
+    del.type = 'button';
+    del.textContent = '×';
+    del.title = 'Remove event';
+    del.addEventListener('click', () => {
+      tpl.events.splice(i, 1);
+      saveState();
+      renderTemplateEditor();
+      computeAll();
+    });
+
+    row.append(nameIn, offIn, del);
+    tplEvents.append(row);
+  });
+}
+
+function selectTemplate(id) {
+  state.activeTemplateId = id;
+  saveState();
+  renderTemplateSelect();
+  computeAll();
+}
+
+function openEditor() {
+  renderTemplateEditor();
+  tplOverlay.hidden = false;
+  document.body.classList.add('no-scroll');
+}
+
+function closeEditor() {
+  tplOverlay.hidden = true;
+  document.body.classList.remove('no-scroll');
+  renderTemplateSelect();
+  computeAll();
+}
+
 function init() {
   $('version').textContent = VERSION;
   doyInput.value = state.doy;
   timeInput.value = state.time;
   deviceBtn.disabled = state.zone === deviceZone;
   buildZoneIndex();
+  renderTemplateSelect();
 
   doyInput.addEventListener('input', () => {
     state.doy = doyInput.value;
@@ -362,6 +497,57 @@ function init() {
     }
   });
   deviceBtn.addEventListener('click', () => setZone(deviceZone));
+
+  tplSelect.addEventListener('change', () => selectTemplate(tplSelect.value));
+  $('tpl-edit-btn').addEventListener('click', openEditor);
+  $('tpl-done').addEventListener('click', closeEditor);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !tplOverlay.hidden) closeEditor();
+  });
+
+  tplName.addEventListener('input', () => {
+    activeTemplate().name = tplName.value;
+    saveState();
+    renderTemplateSelect();
+  });
+  $('tpl-add-event').addEventListener('click', () => {
+    activeTemplate().events.push({ name: '', offset: '-1:00' });
+    saveState();
+    renderTemplateEditor();
+    computeAll();
+  });
+  $('tpl-new').addEventListener('click', () => {
+    const tpl = { id: newId(), name: uniqueTemplateName('New template'), events: [] };
+    state.templates.push(tpl);
+    selectTemplate(tpl.id);
+    renderTemplateEditor();
+  });
+  $('tpl-duplicate').addEventListener('click', () => {
+    const src = activeTemplate();
+    const tpl = {
+      id: newId(),
+      name: uniqueTemplateName(`${src.name} (copy)`),
+      events: src.events.map((e) => ({ ...e })),
+    };
+    state.templates.push(tpl);
+    selectTemplate(tpl.id);
+    renderTemplateEditor();
+  });
+  $('tpl-restore').addEventListener('click', () => {
+    const tpl = makeDefaultTemplate();
+    tpl.name = uniqueTemplateName(tpl.name);
+    state.templates.push(tpl);
+    selectTemplate(tpl.id);
+    renderTemplateEditor();
+  });
+  $('tpl-delete').addEventListener('click', () => {
+    const tpl = activeTemplate();
+    if (!window.confirm(`Delete template "${tpl.name}"?`)) return;
+    state.templates = state.templates.filter((t) => t.id !== tpl.id);
+    if (!state.templates.length) state.templates.push(makeDefaultTemplate());
+    selectTemplate(state.templates[0].id);
+    renderTemplateEditor();
+  });
 
   copyBtn.addEventListener('click', async () => {
     if (takeoffMs === null) return;

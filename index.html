@@ -41,6 +41,11 @@
 
   <section class="card results">
     <h2>Timeline</h2>
+    <div class="tpl-row">
+      <label for="tpl-select">Template</label>
+      <select id="tpl-select"></select>
+      <button id="tpl-edit-btn" type="button" class="ghost">Edit&hellip;</button>
+    </div>
     <p id="resolved" class="resolved empty">Enter Julian day and Zulu time&hellip;</p>
     <div class="table-wrap">
       <table id="timeline-table" hidden>
@@ -54,6 +59,38 @@
     </div>
   </section>
 </main>
+
+<div id="tpl-overlay" class="overlay" hidden>
+  <div class="overlay-panel">
+    <div class="overlay-head">
+      <h2>Edit template</h2>
+      <button id="tpl-done" class="primary" type="button">Done</button>
+    </div>
+    <div class="tpl-name-row">
+      <label>Template name
+        <input id="tpl-name" autocomplete="off">
+      </label>
+    </div>
+    <div class="ev-head" aria-hidden="true">
+      <span class="h-name">Event</span>
+      <span class="h-off">Offset</span>
+      <span class="h-sp"></span>
+    </div>
+    <div id="tpl-events" class="tpl-events"></div>
+    <div class="tpl-takeoff-row">Takeoff <span class="mono">0:00</span> &mdash; always included</div>
+    <div class="row-actions">
+      <button id="tpl-add-event" type="button">+ Add event</button>
+    </div>
+    <p class="hint">Offsets are relative to takeoff: <code>-2:30</code> = 2&nbsp;h 30&nbsp;min before, plain numbers are minutes. Use <code>+</code> for after takeoff.</p>
+    <div class="row-actions tpl-manage-actions">
+      <button id="tpl-new" type="button">New</button>
+      <button id="tpl-duplicate" type="button">Duplicate</button>
+      <button id="tpl-restore" type="button" class="ghost">Restore default</button>
+      <button id="tpl-delete" type="button" class="danger">Delete</button>
+    </div>
+  </div>
+</div>
+
 <footer>
   <span id="version"></span> &middot;
   <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues" target="_blank" rel="noopener">Report an issue</a> &middot;
