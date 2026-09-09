@@ -1,9 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.2.8';
+import * as T from './time-engine.js?v=0.3.0';
+import { initSlider } from './slider.js?v=0.3.0';
 
-const VERSION = 'v0.2.8';
+const VERSION = 'v0.3.0';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -62,6 +63,7 @@ function loadState() {
   return {
     doy: typeof s.doy === 'string' ? s.doy : '',
     time: typeof s.time === 'string' ? s.time : '',
+    page: s.page === 'slider' ? 'slider' : 'julian',
     dateMode: s.dateMode === 'calendar' ? 'calendar' : 'julian',
     timeMode: s.timeMode === 'local' ? 'local' : 'zulu',
     calDate: typeof s.calDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.calDate)
@@ -748,6 +750,29 @@ function closeManager() {
   computeAll();
 }
 
+const julianPage = $('julian-page');
+const sliderPage = $('slider-page');
+const pageJulianBtn = $('page-julian');
+const pageSliderBtn = $('page-slider');
+const slider = initSlider({
+  stage: $('slider-stage'),
+  rowsEl: $('slider-rows'),
+  nowBtn: $('slider-now'),
+  takeoffBtn: $('slider-takeoff'),
+  getLocalZone: () => state.zone,
+  getTakeoffMs: () => takeoffMs,
+});
+
+function applyPage(page) {
+  state.page = page;
+  saveState();
+  julianPage.hidden = page !== 'julian';
+  sliderPage.hidden = page !== 'slider';
+  pageJulianBtn.classList.toggle('active', page === 'julian');
+  pageSliderBtn.classList.toggle('active', page === 'slider');
+  if (page === 'slider') slider.open();
+}
+
 function init() {
   $('version').textContent = VERSION;
   doyInput.value = state.doy;
@@ -844,7 +869,21 @@ function init() {
     flash(copyBtn, 'Copied ✓');
   });
 
+  // page navigation, synced to the URL hash so the phone's back button
+  // flips pages instead of leaving the app
+  pageJulianBtn.addEventListener('click', () => { location.hash = 'julian'; });
+  pageSliderBtn.addEventListener('click', () => { location.hash = 'slider'; });
+  window.addEventListener('hashchange', () => {
+    applyPage(location.hash === '#slider' ? 'slider' : 'julian');
+  });
+
   computeAll();
+
+  const initialPage = location.hash === '#slider' ? 'slider'
+    : location.hash === '#julian' ? 'julian'
+    : state.page;
+  history.replaceState(null, '', `#${initialPage}`);
+  applyPage(initialPage);
 }
 
 init();

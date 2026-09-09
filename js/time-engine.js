@@ -152,6 +152,28 @@ export function zoneWallToUtc(zone, year, month1, day, hour, minute) {
   return guess;
 }
 
+// Local-day segments (midnight to midnight in the zone's wall clock, so
+// 23/25 h around DST changes) covering [fromMs, toMs]. Labels are taken
+// at midday, safely inside the day.
+export function daySegments(zone, fromMs, toMs) {
+  const midnightOf = (ms) => {
+    const p = wallParts(ms, zone);
+    return zoneWallToUtc(zone, p.year, p.month, p.day, 0, 0);
+  };
+  let start = midnightOf(fromMs);
+  if (start > fromMs) start = midnightOf(fromMs - MS_PER_DAY);
+  const segs = [];
+  while (start < toMs && segs.length < 64) {
+    const midday = start + 12 * 3_600_000;
+    let end = midnightOf(start + 36 * 3_600_000);
+    if (end <= start) end = start + MS_PER_DAY;
+    const p = zonedParts(midday, zone);
+    segs.push({ start, end, weekday: p.weekday, day: p.day, month: p.month });
+    start = end;
+  }
+  return segs;
+}
+
 // "America/New_York" → "New York"
 export function zoneLabel(zone) {
   return zone.split('/').pop().replaceAll('_', ' ');

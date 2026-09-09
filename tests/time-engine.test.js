@@ -5,6 +5,7 @@ import {
   parseOffset, offsetToHMM, resolveJulianYear, makeUtcInstant,
   zonedParts, isValidZone, buildCopyText,
   zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName, zoneWallToUtc,
+  daySegments,
 } from '../js/time-engine.js';
 
 test('leap years', () => {
@@ -101,6 +102,28 @@ test('local wall time to UTC', () => {
   // spring-forward: 0230 on 8 Mar 2026 doesn't exist; resolves just past
   // the gap (0330 EDT)
   assert.equal(zoneWallToUtc('America/New_York', 2026, 3, 8, 2, 30), Date.UTC(2026, 2, 8, 7, 30));
+});
+
+test('day segments: continuity, DST widths, offset midnights', () => {
+  const HOUR = 3_600_000;
+  const nov = daySegments('America/New_York', Date.UTC(2026, 9, 30), Date.UTC(2026, 10, 3));
+  for (let i = 1; i < nov.length; i++) assert.equal(nov[i].start, nov[i - 1].end);
+  const dst = nov.find((s) => s.day === '01');
+  assert.equal(dst.end - dst.start, 25 * HOUR); // fall-back day is 25h wide
+  assert.equal(dst.weekday, 'SUN');
+  const mar = daySegments('America/New_York', Date.UTC(2026, 2, 7), Date.UTC(2026, 2, 9));
+  const gap = mar.find((s) => s.day === '08');
+  assert.equal(gap.end - gap.start, 23 * HOUR); // spring-forward day is 23h
+
+  // Kolkata's midnight is 1830Z the previous day
+  const ind = daySegments('Asia/Kolkata', Date.UTC(2026, 8, 10), Date.UTC(2026, 8, 11));
+  const d11 = ind.find((s) => s.day === '11');
+  assert.equal(d11.start, Date.UTC(2026, 8, 10, 18, 30));
+
+  const z = daySegments('UTC', Date.UTC(2026, 8, 10, 1), Date.UTC(2026, 8, 10, 2));
+  assert.equal(z[0].start, Date.UTC(2026, 8, 10));
+  assert.equal(z[0].end - z[0].start, 24 * HOUR);
+  assert.equal(z[0].weekday, 'THU');
 });
 
 test('zone validation', () => {
