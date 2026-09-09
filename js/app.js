@@ -1,10 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.3.0';
-import { initSlider } from './slider.js?v=0.3.0';
+import * as T from './time-engine.js?v=0.3.1';
+import { initSlider } from './slider.js?v=0.3.1';
 
-const VERSION = 'v0.3.0';
+const VERSION = 'v0.3.1';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -64,6 +64,9 @@ function loadState() {
     doy: typeof s.doy === 'string' ? s.doy : '',
     time: typeof s.time === 'string' ? s.time : '',
     page: s.page === 'slider' ? 'slider' : 'julian',
+    sliderZones: Array.isArray(s.sliderZones)
+      ? [...new Set(s.sliderZones.filter((z) => typeof z === 'string' && T.isValidZone(z)))]
+      : [],
     dateMode: s.dateMode === 'calendar' ? 'calendar' : 'julian',
     timeMode: s.timeMode === 'local' ? 'local' : 'zulu',
     calDate: typeof s.calDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.calDate)
@@ -238,36 +241,61 @@ function searchZones(query) {
   return scored.slice(0, 8).map((s) => s[1]);
 }
 
-function hideSuggest() {
-  suggestEl.hidden = true;
-  suggestEl.replaceChildren();
-}
-
-function showSuggest(query) {
-  const results = query ? searchZones(query) : browseEntries();
-  if (!results.length) { hideSuggest(); return; }
-  suggestEl.replaceChildren();
-  for (const r of results) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    if (r.id === state.zone) btn.className = 'active';
-    const idSpan = document.createElement('span');
-    idSpan.className = 'zs-id';
-    idSpan.textContent = r.id;
-    const meta = document.createElement('span');
-    meta.className = 'zs-meta';
-    meta.textContent = [r.display, r.offset].filter(Boolean).join(' · ');
-    btn.append(idSpan, meta);
-    // preventDefault keeps the input focused so blur doesn't race the click
-    btn.addEventListener('pointerdown', (e) => e.preventDefault());
-    btn.addEventListener('click', () => {
-      setZone(r.id);
-      hideSuggest();
-      zoneInput.blur();
-    });
-    suggestEl.append(btn);
-  }
-  suggestEl.hidden = false;
+// Shared searchable zone dropdown: browse list on plain focus, typed
+// queries narrow it. Used by the Julian zone field and the slider's
+// zone editor.
+function createZonePicker({ input, menu, isActive, onPick, onEnterFallback }) {
+  const hide = () => {
+    menu.hidden = true;
+    menu.replaceChildren();
+  };
+  const show = (query) => {
+    const results = query ? searchZones(query) : browseEntries();
+    if (!results.length) { hide(); return; }
+    menu.replaceChildren();
+    for (const r of results) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      if (isActive?.(r.id)) btn.className = 'active';
+      const idSpan = document.createElement('span');
+      idSpan.className = 'zs-id';
+      idSpan.textContent = r.id;
+      const meta = document.createElement('span');
+      meta.className = 'zs-meta';
+      meta.textContent = [r.display, r.offset].filter(Boolean).join(' · ');
+      btn.append(idSpan, meta);
+      // preventDefault keeps the input focused so blur doesn't race the click
+      btn.addEventListener('pointerdown', (e) => e.preventDefault());
+      btn.addEventListener('click', () => {
+        onPick(r.id);
+        hide();
+        input.blur();
+      });
+      menu.append(btn);
+    }
+    menu.hidden = false;
+  };
+  input.addEventListener('focus', () => {
+    input.select();
+    show('');
+  });
+  input.addEventListener('input', () => {
+    input.classList.remove('invalid');
+    show(input.value.trim());
+  });
+  input.addEventListener('blur', () => setTimeout(hide, 150));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const first = menu.querySelector('button');
+      if (first && !menu.hidden) first.click();
+      else onEnterFallback?.();
+      input.blur();
+    } else if (e.key === 'Escape') {
+      hide();
+    }
+  });
+  return { hide };
 }
 
 // ---- rendering ----------------------------------------------------------
@@ -754,14 +782,77 @@ const julianPage = $('julian-page');
 const sliderPage = $('slider-page');
 const pageJulianBtn = $('page-julian');
 const pageSliderBtn = $('page-slider');
+const szOverlay = $('sz-overlay');
+const szList = $('sz-list');
+const szAddInput = $('sz-add');
 const slider = initSlider({
   stage: $('slider-stage'),
   rowsEl: $('slider-rows'),
   nowBtn: $('slider-now'),
   takeoffBtn: $('slider-takeoff'),
+  minusBtn: $('slider-minus'),
+  plusBtn: $('slider-plus'),
   getLocalZone: () => state.zone,
+  getExtraZones: () => state.sliderZones,
   getTakeoffMs: () => takeoffMs,
 });
+
+// ---- slider zone editor --------------------------------------------------
+
+function renderSzList() {
+  szList.replaceChildren();
+  const entries = [
+    { zone: 'UTC', title: 'Zulu', locked: true },
+    { zone: state.zone, locked: true },
+    ...state.sliderZones.map((zone) => ({ zone, locked: false })),
+  ];
+  for (const r of entries) {
+    const item = document.createElement('div');
+    item.className = 'sz-item';
+    const main = document.createElement('div');
+    main.className = 'sz-main';
+    const name = document.createElement('span');
+    name.className = 'sz-name';
+    name.textContent = r.title ?? T.zoneLabel(r.zone);
+    const sub = document.createElement('span');
+    sub.className = 'sz-sub';
+    sub.textContent = `${r.zone} · ${T.utcOffsetLabel(Date.now(), r.zone)}`;
+    main.append(name, sub);
+    item.append(main);
+    if (r.locked) {
+      const lock = document.createElement('span');
+      lock.className = 'sz-lock';
+      lock.textContent = 'always shown';
+      item.append(lock);
+    } else {
+      const del = document.createElement('button');
+      del.className = 'row-x';
+      del.type = 'button';
+      del.textContent = '×';
+      del.title = `Remove ${r.zone}`;
+      del.addEventListener('click', () => {
+        state.sliderZones = state.sliderZones.filter((z) => z !== r.zone);
+        saveState();
+        renderSzList();
+      });
+      item.append(del);
+    }
+    szList.append(item);
+  }
+}
+
+function openSzEditor() {
+  szAddInput.value = '';
+  renderSzList();
+  szOverlay.hidden = false;
+  document.body.classList.add('no-scroll');
+}
+
+function closeSzEditor() {
+  szOverlay.hidden = true;
+  document.body.classList.remove('no-scroll');
+  slider.open();
+}
 
 function applyPage(page) {
   state.page = page;
@@ -803,30 +894,17 @@ function init() {
   modeZuluBtn.addEventListener('click', () => setTimeMode('zulu'));
   modeLocalBtn.addEventListener('click', () => setTimeMode('local'));
 
-  zoneInput.addEventListener('focus', () => {
-    zoneInput.select();
-    showSuggest(''); // browse list on plain click; typing narrows it
-  });
-  zoneInput.addEventListener('input', () => {
-    zoneInput.classList.remove('invalid');
-    showSuggest(zoneInput.value.trim());
+  createZonePicker({
+    input: zoneInput,
+    menu: suggestEl,
+    isActive: (zid) => zid === state.zone,
+    onPick: (zid) => setZone(zid),
+    onEnterFallback: commitZone,
   });
   zoneInput.addEventListener('blur', () => {
     setTimeout(() => {
-      hideSuggest();
       if (zoneInput.value.trim() !== zoneDisplayValue()) commitZone();
-    }, 150);
-  });
-  zoneInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const first = suggestEl.querySelector('button');
-      if (first && !suggestEl.hidden) first.click();
-      else commitZone();
-      zoneInput.blur();
-    } else if (e.key === 'Escape') {
-      hideSuggest();
-    }
+    }, 160);
   });
   deviceBtn.addEventListener('click', () => setZone(deviceZone));
 
@@ -844,9 +922,26 @@ function init() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!tplSelectMenu.hidden) { hideTplMenu(); return; }
+    if (!szOverlay.hidden) { closeSzEditor(); return; }
     if (tplOverlay.hidden) return;
     if (!tplEditorView.hidden) discardDraft();
     else closeManager();
+  });
+
+  $('sz-edit').addEventListener('click', openSzEditor);
+  $('sz-done').addEventListener('click', closeSzEditor);
+  createZonePicker({
+    input: szAddInput,
+    menu: $('sz-suggest'),
+    isActive: (zid) => zid === 'UTC' || zid === state.zone || state.sliderZones.includes(zid),
+    onPick: (zid) => {
+      if (zid !== 'UTC' && zid !== state.zone && !state.sliderZones.includes(zid)) {
+        state.sliderZones.push(zid);
+        saveState();
+      }
+      szAddInput.value = '';
+      renderSzList();
+    },
   });
   window.addEventListener('resize', fitZoneInput);
 

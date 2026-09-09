@@ -6,7 +6,7 @@ A one-screen utility for flight crews: take the Julian day + Zulu takeoff time f
 
 ## Status
 
-v0.3.0 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
+v0.3.1 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
 
 ## Features (v0.1)
 
@@ -17,7 +17,7 @@ v0.3.0 — early field testing. Found a wrong time or a rough edge? [Open an iss
 - Named event templates saved on your device — create, edit, duplicate, delete; takeoff (0:00) is always included; ships with a "Standard" template (Stop drink T−12:00, LFA T−4:15, Bus T−3:15)
 - If the sequence spans more than one calendar day, every time carries its weekday (`1730Z (THU 10)`); single-day sequences show no flags
 - One-tap copy of the whole sequence of events as plain text
-- A second "Slider" page: per-zone day bars that drag together under a fixed line for quick cross-zone conversion (1-minute precision, DST-correct day widths); seeds from your latest takeoff calculation
+- A "Convert timezones" page: per-zone day bars that drag together under a fixed line (1-minute precision, hour tick marks, DST-correct day widths); add any zones alongside Zulu and your Julian-page zone; seeds from your latest takeoff calculation
 - No accounts, no server, no tracking — everything is computed on-device
 
 ## Example output

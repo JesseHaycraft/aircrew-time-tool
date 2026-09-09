@@ -7,7 +7,7 @@
 <meta name="description" content="Convert Julian day + Zulu takeoff times into local event timelines for flight crews.">
 <meta name="theme-color" content="#0b0e13">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%230b0e13'/%3E%3Ctext%20x='32'%20y='46'%20font-size='38'%20font-family='monospace'%20font-weight='bold'%20text-anchor='middle'%20fill='%23f5b83d'%3EZ%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=0.3.0">
+<link rel="stylesheet" href="css/style.css?v=0.3.1">
 </head>
 <body>
 <header>
@@ -16,8 +16,8 @@
 </header>
 <main>
   <nav class="page-nav">
-    <button id="page-julian" type="button" class="active">Julian</button>
-    <button id="page-slider" type="button">Slider</button>
+    <button id="page-julian" type="button" class="active">Julian SOEs</button>
+    <button id="page-slider" type="button">Convert timezones</button>
   </nav>
 
   <div id="julian-page">
@@ -82,17 +82,39 @@
   <div id="slider-page" hidden>
     <section class="card slider-card">
       <div class="slider-controls">
-        <button id="slider-now" type="button" class="ghost">Now</button>
-        <button id="slider-takeoff" type="button" class="ghost" disabled>Takeoff</button>
+        <button id="slider-minus" type="button" class="ghost step">&minus;1</button>
+        <div class="slider-jump">
+          <button id="slider-now" type="button" class="ghost">Now</button>
+          <button id="slider-takeoff" type="button" class="ghost" disabled>Takeoff</button>
+        </div>
+        <button id="slider-plus" type="button" class="ghost step">+1</button>
       </div>
       <div id="slider-stage" class="slider-stage">
         <div class="slider-line" aria-hidden="true"></div>
         <div id="slider-rows"></div>
       </div>
       <p class="hint">Drag the bars left or right to change the time &mdash; all zones move together.</p>
+      <div class="row-actions">
+        <button id="sz-edit" type="button">Edit time zones</button>
+      </div>
     </section>
   </div>
 </main>
+
+<div id="sz-overlay" class="overlay" hidden>
+  <div class="overlay-panel">
+    <div class="overlay-head">
+      <h2>Slider time zones</h2>
+      <button id="sz-done" class="primary" type="button">Done</button>
+    </div>
+    <div id="sz-list" class="sz-list"></div>
+    <div class="zone-input-wrap">
+      <input id="sz-add" autocomplete="off" spellcheck="false" placeholder="Add time zone">
+      <div id="sz-suggest" class="zone-suggest" hidden></div>
+    </div>
+    <p class="hint">Zulu and the Julian-page zone are always shown.</p>
+  </div>
+</div>
 
 <div id="tpl-overlay" class="overlay" hidden>
   <div class="overlay-panel">
@@ -141,6 +163,6 @@
   <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues/new?labels=enhancement" target="_blank" rel="noopener">Suggest changes</a> &middot;
   <span>All times are computed on your device. No data is shared over the internet.</span>
 </footer>
-<script type="module" src="js/app.js?v=0.3.0"></script>
+<script type="module" src="js/app.js?v=0.3.1"></script>
 </body>
 </html>

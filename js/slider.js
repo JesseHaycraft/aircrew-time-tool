@@ -1,7 +1,7 @@
 // Slider page: stacked per-zone day bars dragged under a fixed center
 // line. The line is the selected instant; bars carry local-day segments
 // whose widths come from real midnight boundaries (23/25 h across DST).
-import * as T from './time-engine.js?v=0.3.0';
+import * as T from './time-engine.js?v=0.3.1';
 
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
@@ -10,7 +10,10 @@ const PX_PER_MS = PX_PER_HOUR / HOUR;
 const COVER_MS = 20 * HOUR;          // segments are built for t0 ± this
 const REBUILD_MS = 10 * HOUR;        // rebuild when the drag strays this far
 
-export function initSlider({ stage, rowsEl, nowBtn, takeoffBtn, getLocalZone, getTakeoffMs }) {
+export function initSlider({
+  stage, rowsEl, nowBtn, takeoffBtn, minusBtn, plusBtn,
+  getLocalZone, getExtraZones, getTakeoffMs,
+}) {
   let sliderT = null;    // selected instant (ms epoch, minute-snapped)
   let seededFrom = null; // takeoff value the slider last seeded itself from
   let t0 = null;         // reference instant the strips were built around
@@ -23,6 +26,7 @@ export function initSlider({ stage, rowsEl, nowBtn, takeoffBtn, getLocalZone, ge
     return [
       { zone: 'UTC', name: 'Zulu', suffix: 'Z' },
       { zone: getLocalZone(), name: null, suffix: 'L' },
+      ...getExtraZones().map((zone) => ({ zone, name: null, suffix: '' })),
     ];
   }
 
@@ -73,9 +77,15 @@ export function initSlider({ stage, rowsEl, nowBtn, takeoffBtn, getLocalZone, ge
         const width = (seg.end - seg.start) * PX_PER_MS;
         el.style.left = `${left}px`;
         el.style.width = `${width}px`;
+        // weekday and date as separate spans with a center gap, so the
+        // cursor line passes between them when the label sits mid-screen
         const lab = document.createElement('span');
         lab.className = 'sl-seg-label';
-        lab.textContent = `${seg.weekday} ${Number(seg.day)} ${seg.month}`;
+        const wd = document.createElement('span');
+        wd.textContent = seg.weekday;
+        const dm = document.createElement('span');
+        dm.textContent = `${Number(seg.day)} ${seg.month}`;
+        lab.append(wd, dm);
         el.append(lab);
         row.strip.append(el);
         row.segs.push({ lab, left, width, labW: 0 });
@@ -160,6 +170,12 @@ export function initSlider({ stage, rowsEl, nowBtn, takeoffBtn, getLocalZone, ge
   takeoffBtn.addEventListener('click', () => {
     const t = getTakeoffMs();
     if (t !== null) setT(t);
+  });
+  minusBtn.addEventListener('click', () => {
+    if (sliderT !== null) setT(sliderT - MINUTE);
+  });
+  plusBtn.addEventListener('click', () => {
+    if (sliderT !== null) setT(sliderT + MINUTE);
   });
 
   window.addEventListener('resize', () => {
