@@ -28,28 +28,13 @@
   </section>
 
   <section class="card">
-    <h2>Local time zones</h2>
-    <div id="zone-chips" class="chips"></div>
-    <div class="zone-add-row">
-      <input id="zone-add" list="zone-list" placeholder="Add zone (e.g. America/New_York)" autocomplete="off">
-      <button id="zone-add-btn" type="button">Add</button>
+    <h2>Local time zone</h2>
+    <div class="zone-row">
+      <input id="zone-input" list="zone-list" autocomplete="off" spellcheck="false">
+      <button id="zone-device-btn" type="button" class="ghost">Device zone</button>
       <datalist id="zone-list"></datalist>
     </div>
-  </section>
-
-  <section class="card">
-    <h2>Events</h2>
-    <div class="ev-head" aria-hidden="true">
-      <span class="h-name">Event</span>
-      <span class="h-off">Offset</span>
-      <span class="h-sp"></span>
-    </div>
-    <div id="events-editor" class="events-editor"></div>
-    <div class="row-actions">
-      <button id="add-event" type="button">+ Add event</button>
-      <button id="reset-events" type="button" class="ghost">Reset to defaults</button>
-    </div>
-    <p class="hint">Offsets are relative to takeoff: <code>-2:30</code> = 2&nbsp;h 30&nbsp;min before, plain numbers are minutes.</p>
+    <p class="hint">Local times convert to this zone &mdash; defaults to your device&rsquo;s zone.</p>
   </section>
 
   <section class="card results">
