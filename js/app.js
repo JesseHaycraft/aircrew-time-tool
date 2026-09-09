@@ -1,9 +1,9 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.2.3';
+import * as T from './time-engine.js?v=0.2.4';
 
-const VERSION = 'v0.2.3';
+const VERSION = 'v0.2.4';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -111,7 +111,9 @@ const timelineBody = $('timeline-body');
 const copyBtn = $('copy-btn');
 const shareBtn = $('share-btn');
 const deviceBtn = $('zone-device-btn');
-const tplSelect = $('tpl-select');
+const tplSelectBtn = $('tpl-select-btn');
+const tplSelectLabel = $('tpl-select-label');
+const tplSelectMenu = $('tpl-select-menu');
 const tplOverlay = $('tpl-overlay');
 const tplListView = $('tpl-list-view');
 const tplEditorView = $('tpl-editor-view');
@@ -122,6 +124,8 @@ const tplEvents = $('tpl-events');
 // The editor works on a draft copy; Save commits it, ‹ Templates discards.
 let draft = null;
 let draftIsNew = false;
+// Template row currently showing its inline delete confirmation.
+let confirmDeleteId = null;
 
 // ---- zone search index --------------------------------------------------
 // Every zone is searchable by IANA id, city, long standard/daylight names,
@@ -259,21 +263,35 @@ function th(text) {
 }
 
 function renderTemplateSelect() {
-  tplSelect.replaceChildren();
-  tplSelect.disabled = !state.templates.length;
-  if (!state.templates.length) {
-    const opt = document.createElement('option');
-    opt.textContent = 'No templates';
-    tplSelect.append(opt);
-    return;
-  }
+  const tpl = activeTemplate();
+  tplSelectLabel.textContent = state.templates.length
+    ? (tpl?.name || 'Untitled')
+    : 'No templates';
+  tplSelectBtn.disabled = !state.templates.length;
+  hideTplMenu();
+}
+
+function hideTplMenu() {
+  tplSelectMenu.hidden = true;
+  tplSelectMenu.replaceChildren();
+  tplSelectBtn.setAttribute('aria-expanded', 'false');
+}
+
+function showTplMenu() {
+  tplSelectMenu.replaceChildren();
   for (const t of state.templates) {
-    const opt = document.createElement('option');
-    opt.value = t.id;
-    opt.textContent = t.name || 'Untitled';
-    opt.selected = t.id === state.activeTemplateId;
-    tplSelect.append(opt);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = t.id === state.activeTemplateId ? 'active' : '';
+    b.textContent = t.name || 'Untitled';
+    b.addEventListener('click', () => {
+      selectTemplate(t.id);
+      hideTplMenu();
+    });
+    tplSelectMenu.append(b);
   }
+  tplSelectMenu.hidden = false;
+  tplSelectBtn.setAttribute('aria-expanded', 'true');
 }
 
 function renderTimeline() {
@@ -314,7 +332,7 @@ function renderTimeline() {
     zTd.className = 'time-cell';
     zTd.textContent = evDoy === toDoy
       ? `${zp.hhmm}Z`
-      : `${String(evDoy).padStart(3, '0')}/${zp.hhmm}Z`;
+      : `${zp.hhmm}Z (${zp.weekday} ${Number(zp.day)})`;
     tr.append(zTd);
 
     const p = T.zonedParts(ms, state.zone);
@@ -381,8 +399,20 @@ function computeAll() {
   if (document.activeElement !== zoneInput) {
     zoneInput.value = zoneDisplayValue();
     zoneInput.scrollLeft = 0;
+    fitZoneInput();
   }
   renderTimeline();
+}
+
+// Shrink the zone field's font until the full value fits — a truncated
+// "Pacific/Guam UTC+10" would read as UTC+1.
+function fitZoneInput() {
+  zoneInput.style.fontSize = '';
+  let size = parseFloat(getComputedStyle(zoneInput).fontSize);
+  while (zoneInput.scrollWidth > zoneInput.clientWidth && size > 9) {
+    size -= 1;
+    zoneInput.style.fontSize = `${size}px`;
+  }
 }
 
 // The input shows the zone with its UTC offset, e.g. "Pacific/Guam UTC+10",
@@ -420,6 +450,7 @@ function setZone(zone) {
   computeAll();
   zoneInput.value = zoneDisplayValue();
   zoneInput.scrollLeft = 0;
+  fitZoneInput();
 }
 
 function updateModeUI() {
@@ -512,51 +543,78 @@ function renderTemplateList() {
     const actions = document.createElement('div');
     actions.className = 'tpl-item-actions';
 
-    const useBtn = document.createElement('button');
-    useBtn.type = 'button';
-    useBtn.textContent = 'Use';
-    useBtn.disabled = t.id === state.activeTemplateId;
-    useBtn.addEventListener('click', () => {
-      selectTemplate(t.id);
-      closeManager();
-    });
+    if (confirmDeleteId === t.id) {
+      const label = document.createElement('span');
+      label.className = 'tpl-confirm-label';
+      label.textContent = 'Delete this template?';
 
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.textContent = 'Edit';
-    editBtn.addEventListener('click', () => openEditorFor(t));
-
-    const dupBtn = document.createElement('button');
-    dupBtn.type = 'button';
-    dupBtn.textContent = 'Duplicate';
-    dupBtn.addEventListener('click', () => {
-      state.templates.push({
-        id: newId(),
-        name: uniqueTemplateName(`${t.name} (copy)`),
-        events: t.events.map((e) => ({ ...e })),
+      const yes = document.createElement('button');
+      yes.type = 'button';
+      yes.className = 'danger';
+      yes.textContent = 'Delete';
+      yes.addEventListener('click', () => {
+        confirmDeleteId = null;
+        state.templates = state.templates.filter((x) => x.id !== t.id);
+        if (state.activeTemplateId === t.id) {
+          state.activeTemplateId = state.templates[0]?.id ?? null;
+        }
+        saveState();
+        renderTemplateList();
+        renderTemplateSelect();
+        computeAll();
       });
-      saveState();
-      renderTemplateList();
-      renderTemplateSelect();
-    });
 
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'danger';
-    delBtn.textContent = 'Delete';
-    delBtn.addEventListener('click', () => {
-      if (!window.confirm(`Delete template "${t.name}"?`)) return;
-      state.templates = state.templates.filter((x) => x.id !== t.id);
-      if (state.activeTemplateId === t.id) {
-        state.activeTemplateId = state.templates[0]?.id ?? null;
-      }
-      saveState();
-      renderTemplateList();
-      renderTemplateSelect();
-      computeAll();
-    });
+      const no = document.createElement('button');
+      no.type = 'button';
+      no.className = 'ghost';
+      no.textContent = 'Cancel';
+      no.addEventListener('click', () => {
+        confirmDeleteId = null;
+        renderTemplateList();
+      });
 
-    actions.append(useBtn, editBtn, dupBtn, delBtn);
+      actions.append(label, yes, no);
+    } else {
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.textContent = 'Use';
+      useBtn.disabled = t.id === state.activeTemplateId;
+      useBtn.addEventListener('click', () => {
+        selectTemplate(t.id);
+        closeManager();
+      });
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', () => openEditorFor(t));
+
+      const dupBtn = document.createElement('button');
+      dupBtn.type = 'button';
+      dupBtn.textContent = 'Duplicate';
+      dupBtn.addEventListener('click', () => {
+        state.templates.push({
+          id: newId(),
+          name: uniqueTemplateName(`${t.name} (copy)`),
+          events: t.events.map((e) => ({ ...e })),
+        });
+        saveState();
+        renderTemplateList();
+        renderTemplateSelect();
+      });
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'danger';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', () => {
+        confirmDeleteId = t.id;
+        renderTemplateList();
+      });
+
+      actions.append(useBtn, editBtn, dupBtn, delBtn);
+    }
+
     item.append(head, actions);
     tplList.append(item);
   }
@@ -651,6 +709,7 @@ function discardDraft() {
 }
 
 function openManager() {
+  confirmDeleteId = null;
   showListView();
   tplOverlay.hidden = false;
   document.body.classList.add('no-scroll');
@@ -719,17 +778,25 @@ function init() {
   });
   deviceBtn.addEventListener('click', () => setZone(deviceZone));
 
-  tplSelect.addEventListener('change', () => selectTemplate(tplSelect.value));
+  tplSelectBtn.addEventListener('click', () => {
+    if (tplSelectMenu.hidden) showTplMenu(); else hideTplMenu();
+  });
+  document.addEventListener('click', (e) => {
+    if (!tplSelectMenu.hidden && !e.target.closest('.tpl-select-wrap')) hideTplMenu();
+  });
   $('tpl-manage-btn').addEventListener('click', openManager);
   $('tpl-done').addEventListener('click', closeManager);
   $('tpl-back').addEventListener('click', discardDraft);
   $('tpl-save').addEventListener('click', saveDraft);
   $('tpl-new').addEventListener('click', openEditorForNew);
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || tplOverlay.hidden) return;
+    if (e.key !== 'Escape') return;
+    if (!tplSelectMenu.hidden) { hideTplMenu(); return; }
+    if (tplOverlay.hidden) return;
     if (!tplEditorView.hidden) discardDraft();
     else closeManager();
   });
+  window.addEventListener('resize', fitZoneInput);
 
   tplName.addEventListener('input', () => {
     draft.name = tplName.value;

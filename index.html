@@ -7,7 +7,7 @@
 <meta name="description" content="Convert Julian day + Zulu takeoff times into local event timelines for flight crews.">
 <meta name="theme-color" content="#0b0e13">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%230b0e13'/%3E%3Ctext%20x='32'%20y='46'%20font-size='38'%20font-family='monospace'%20font-weight='bold'%20text-anchor='middle'%20fill='%23f5b83d'%3EZ%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=0.2.3">
+<link rel="stylesheet" href="css/style.css?v=0.2.4">
 </head>
 <body>
 <header>
@@ -51,8 +51,13 @@
   <section class="card results">
     <h2>Sequence of Events</h2>
     <div class="tpl-row">
-      <label for="tpl-select">Template</label>
-      <select id="tpl-select"></select>
+      <span class="tpl-label">Template</span>
+      <div class="tpl-select-wrap">
+        <button id="tpl-select-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
+          <span id="tpl-select-label"></span>
+        </button>
+        <div id="tpl-select-menu" class="tpl-select-menu" hidden></div>
+      </div>
       <button id="tpl-manage-btn" type="button" class="ghost">Manage&hellip;</button>
     </div>
     <p id="resolved" class="resolved empty">Enter Julian day and Zulu time&hellip;</p>
@@ -115,6 +120,6 @@
   <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues" target="_blank" rel="noopener">Report an issue</a> &middot;
   <span>All times are computed on your device. No data is shared over the internet.</span>
 </footer>
-<script type="module" src="js/app.js?v=0.2.3"></script>
+<script type="module" src="js/app.js?v=0.2.4"></script>
 </body>
 </html>

@@ -112,9 +112,11 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 .resolved.warn { color: var(--warn); }
 .resolved.empty { color: var(--muted); font-family: inherit; font-size: 0.95rem; }
 
-.zone-row { display: flex; gap: 8px; }
+.zone-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .zone-row button { flex-shrink: 0; }
-.zone-input-wrap { position: relative; flex: 1; min-width: 0; }
+/* min-width forces the button to wrap below on narrow screens, keeping the
+   zone + offset value readable at full size instead of truncating */
+.zone-input-wrap { position: relative; flex: 1; min-width: 220px; }
 #zone-input { width: 100%; font-family: var(--mono); }
 
 .zone-suggest {
@@ -134,21 +136,6 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 .zs-id { display: block; font-family: var(--mono); font-size: 0.95rem; }
 .zs-meta { display: block; color: var(--muted); font-size: 0.8rem; }
 
-select {
-  font: inherit;
-  color: var(--accent);
-  background-color: #0f141c;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 9px 34px 9px 12px;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='12'%20height='8'%3E%3Cpath%20d='M1%201l5%205%205-5'%20fill='none'%20stroke='%238b95a6'%20stroke-width='2'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-}
-select:focus { outline: none; border-color: var(--accent); }
-
 button { cursor: pointer; padding: 10px 14px; background: #1c2432; }
 button:hover { border-color: var(--accent); }
 button.ghost { background: transparent; }
@@ -159,10 +146,43 @@ button.primary {
 button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ---- template selector ---- */
+/* ---- template selector (app-themed dropdown, not the native select) ---- */
 .tpl-row { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
-.tpl-row label { font-size: 0.85rem; color: var(--muted); }
-.tpl-row select { flex: 1; min-width: 0; }
+.tpl-label { font-size: 0.85rem; color: var(--muted); }
+.tpl-select-wrap { position: relative; flex: 1; min-width: 0; }
+#tpl-select-btn {
+  width: 100%;
+  text-align: left;
+  background-color: #0f141c;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 34px 9px 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='12'%20height='8'%3E%3Cpath%20d='M1%201l5%205%205-5'%20fill='none'%20stroke='%238b95a6'%20stroke-width='2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+#tpl-select-btn:disabled { color: var(--muted); cursor: default; }
+.tpl-select-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: #161d28;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  z-index: 30;
+  max-height: 280px; overflow-y: auto;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+.tpl-select-menu button {
+  display: block; width: 100%; text-align: left;
+  background: transparent; border: none; border-radius: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  color: var(--text);
+}
+.tpl-select-menu button:last-child { border-bottom: none; }
+.tpl-select-menu button:hover { background: #1c2432; border-color: var(--border); }
+.tpl-select-menu button.active { color: var(--accent); }
 
 /* ---- template editor overlay ---- */
 .overlay {
@@ -206,8 +226,9 @@ body.no-scroll { overflow: hidden; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tpl-item-meta { color: var(--muted); font-size: 0.8rem; }
-.tpl-item-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.tpl-item-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .tpl-item-actions button { font-size: 0.8rem; padding: 5px 12px; }
+.tpl-confirm-label { color: var(--warn); font-size: 0.85rem; }
 
 button.danger { color: var(--danger); background: transparent; }
 button.danger:hover { border-color: var(--danger); }

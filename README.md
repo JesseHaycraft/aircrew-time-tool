@@ -6,7 +6,7 @@ A one-screen utility for flight crews: take the Julian day + Zulu takeoff time f
 
 ## Status
 
-v0.2.3 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
+v0.2.4 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
 
 ## Features (v0.1)
 
@@ -15,7 +15,7 @@ v0.2.3 — early field testing. Found a wrong time or a rough edge? [Open an iss
 - Takeoff time entered as Zulu or as local time in the selected zone (toggle); local entry converts DST-correctly
 - Local times in your device's time zone by default — searchable zone picker (city, zone name, abbreviation, or offset), DST-correct as of the event date
 - Named event templates saved on your device — create, edit, duplicate, delete; takeoff (0:00) is always included; ships with a "Standard" template (Stop drink T−12:00, LFA T−4:15, Bus T−3:15)
-- Events that fall on a different day are flagged, in Zulu (`253/2230Z`) and local (`2230 EDT (THU 10)`)
+- Events that fall on a different day are flagged with the weekday, e.g. `1730Z (THU 10)` / `1330L (THU 10)`
 - One-tap copy/share of the whole timeline as plain text
 - No accounts, no server, no tracking — everything is computed on-device
 
