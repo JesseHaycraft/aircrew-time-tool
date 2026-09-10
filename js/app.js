@@ -1,10 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.4.7';
-import { initSlider } from './slider.js?v=0.4.7';
+import * as T from './time-engine.js?v=0.4.8';
+import { initSlider } from './slider.js?v=0.4.8';
 
-const VERSION = 'v0.4.7';
+const VERSION = 'v0.4.8';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -23,6 +23,8 @@ function makeDefaultTemplate() {
     id: newId(),
     name: 'Standard',
     takeoffCountdown: false,
+    includeLanding: true,
+    landingCountdown: false,
     events: DEFAULT_TEMPLATE_EVENTS.map((e) => ({ ...e })),
   };
 }
@@ -31,6 +33,7 @@ const todayUtcStr = () => new Date().toISOString().slice(0, 10);
 
 let state = loadState();
 let takeoffMs = null;
+let landingMs = null;   // from the Landing card, only when a takeoff is set too
 
 function sanitizeTemplates(raw) {
   if (!Array.isArray(raw)) return [];
@@ -41,6 +44,8 @@ function sanitizeTemplates(raw) {
       id: typeof t.id === 'string' ? t.id : newId(),
       name: t.name,
       takeoffCountdown: t.takeoffCountdown === true,
+      includeLanding: t.includeLanding !== false,
+      landingCountdown: t.landingCountdown === true,
       events: t.events
         .filter((e) => e && typeof e.name === 'string' && typeof e.offset === 'string')
         .map((e) => ({ name: e.name, offset: e.offset, countdown: e.countdown === true })),
@@ -82,6 +87,10 @@ function loadState() {
     sliderZonesInitialized: true,
     dateMode: s.dateMode === 'calendar' ? 'calendar' : 'julian',
     timeMode: s.timeMode === 'local' ? 'local' : 'zulu',
+    landingOpen: s.landingOpen === true,
+    landingMode: s.landingMode === 'duration' ? 'duration' : 'zulu',
+    landingZulu: typeof s.landingZulu === 'string' ? s.landingZulu : '',
+    landingDuration: typeof s.landingDuration === 'string' ? s.landingDuration : '',
     calDate: typeof s.calDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.calDate)
       ? s.calDate
       : todayUtcStr(),
@@ -113,6 +122,13 @@ function timelineEvents() {
     }))
     .filter((e) => e.offsetMin !== null);
   events.push({ name: 'Takeoff', offsetMin: 0, countdown: tpl?.takeoffCountdown === true });
+  if (landingMs !== null && takeoffMs !== null && tpl?.includeLanding !== false) {
+    events.push({
+      name: 'Landing',
+      offsetMin: Math.round((landingMs - takeoffMs) / 60_000),
+      countdown: tpl?.landingCountdown === true,
+    });
+  }
   return events.sort((a, b) => a.offsetMin - b.offsetMin);
 }
 
@@ -123,6 +139,13 @@ const modeJulianBtn = $('mode-julian');
 const modeCalBtn = $('mode-cal');
 const modeZuluBtn = $('mode-zulu');
 const modeLocalBtn = $('mode-local');
+const landingToggle = $('landing-toggle');
+const landingBody = $('landing-body');
+const modeLZuluBtn = $('mode-lzulu');
+const modeLDurBtn = $('mode-ldur');
+const landingInput = $('landing-input');
+const landingCalc = $('landing-calc');
+const landingCalcLabel = $('landing-calc-label');
 const timeInput = $('ztime');
 const resolvedEl = $('resolved');
 const clockEl = $('clock');
@@ -143,6 +166,8 @@ const tplList = $('tpl-list');
 const tplName = $('tpl-name');
 const tplEvents = $('tpl-events');
 const tplTakeoffCdSlot = $('tpl-takeoff-cd');
+const tplLandingCdSlot = $('tpl-landing-cd');
+const tplLandingInclude = $('tpl-landing-include');
 
 // The editor works on a draft copy; Save commits it, ‹ Templates discards.
 let draft = null;
@@ -509,6 +534,8 @@ function computeAll() {
     }
   }
 
+  computeLanding();
+
   if (resolvedText === null && takeoffMs === null) {
     resolvedText = state.dateMode === 'calendar'
       ? 'Pick a date and enter a takeoff time…'
@@ -524,6 +551,56 @@ function computeAll() {
     fitZoneInput();
   }
   renderTimeline();
+}
+
+// Landing card: a Zulu landing time (on the takeoff day, or the next if
+// it's not after the takeoff) or a flight duration; each shows the other.
+function computeLanding() {
+  landingMs = null;
+  let label = '';
+  let calc = '';
+  let flag = '';
+  let muted = false;
+  const zuluMode = state.landingMode === 'zulu';
+  const raw = zuluMode ? state.landingZulu : state.landingDuration;
+  const parsed = zuluMode ? T.parseTimeHHMM(raw) : T.parseDuration(raw);
+  landingInput.classList.toggle('invalid', raw.trim() !== '' && parsed === null);
+  if (parsed !== null && takeoffMs === null) {
+    calc = 'Needs a takeoff time';
+    muted = true;
+  } else if (parsed !== null) {
+    if (zuluMode) {
+      const d = new Date(takeoffMs);
+      let cand = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), parsed.h, parsed.m);
+      if (cand <= takeoffMs) cand += 86_400_000;
+      landingMs = cand;
+      label = 'Duration';
+      calc = T.offsetToHMM((landingMs - takeoffMs) / 60_000).replace('+', '');
+    } else {
+      landingMs = takeoffMs + parsed * 60_000;
+      label = 'Lands';
+      calc = `${T.zonedParts(landingMs, 'UTC').hhmm}Z`;
+    }
+    const lp = T.zonedParts(landingMs, 'UTC');
+    if (lp.dateKey !== T.zonedParts(takeoffMs, 'UTC').dateKey) {
+      flag = `(${lp.weekday} ${Number(lp.day)})`;
+    }
+  }
+  landingCalcLabel.textContent = label || '\u00a0';
+  landingCalc.replaceChildren(calc);
+  if (flag) {
+    const f = document.createElement('span');
+    f.className = 'day-flag';
+    f.textContent = flag;
+    landingCalc.append(' ', f);
+  }
+  landingCalc.classList.toggle('muted', muted);
+  if (document.activeElement !== landingInput) landingInput.value = raw;
+  landingInput.placeholder = zuluMode ? '1205' : '8:35';
+  modeLZuluBtn.classList.toggle('active', zuluMode);
+  modeLDurBtn.classList.toggle('active', !zuluMode);
+  landingToggle.setAttribute('aria-expanded', String(state.landingOpen));
+  landingBody.hidden = !state.landingOpen;
 }
 
 // Shrink the zone field's font until the full value fits — a truncated
@@ -659,7 +736,8 @@ function renderTemplateList() {
     meta.className = 'tpl-item-meta';
     const n = t.events.length;
     meta.textContent =
-      `${n} event${n === 1 ? '' : 's'} + takeoff${t.id === state.activeTemplateId ? ' · in use' : ''}`;
+      `${n} event${n === 1 ? '' : 's'} + takeoff${t.includeLanding !== false ? ' + landing' : ''}`
+      + `${t.id === state.activeTemplateId ? ' · in use' : ''}`;
     head.append(nameEl, meta);
 
     const actions = document.createElement('div');
@@ -719,6 +797,8 @@ function renderTemplateList() {
           id: newId(),
           name: uniqueTemplateName(`${t.name} (copy)`),
           takeoffCountdown: t.takeoffCountdown === true,
+          includeLanding: t.includeLanding !== false,
+          landingCountdown: t.landingCountdown === true,
           events: t.events.map((e) => ({ ...e })),
         });
         saveState();
@@ -791,6 +871,11 @@ function renderTemplateEditor() {
     () => draft.takeoffCountdown === true,
     (on) => { draft.takeoffCountdown = on; },
   ));
+  tplLandingInclude.checked = draft.includeLanding !== false;
+  tplLandingCdSlot.replaceChildren(stopwatchToggle(
+    () => draft.landingCountdown === true,
+    (on) => { draft.landingCountdown = on; },
+  ));
 }
 
 const STOPWATCH_SVG =
@@ -835,6 +920,8 @@ function openEditorFor(tpl) {
     id: tpl.id,
     name: tpl.name,
     takeoffCountdown: tpl.takeoffCountdown === true,
+    includeLanding: tpl.includeLanding !== false,
+    landingCountdown: tpl.landingCountdown === true,
     events: tpl.events.map((e) => ({ ...e })),
   };
   draftIsNew = false;
@@ -842,7 +929,14 @@ function openEditorFor(tpl) {
 }
 
 function openEditorForNew() {
-  draft = { id: newId(), name: uniqueTemplateName('New template'), takeoffCountdown: false, events: [] };
+  draft = {
+    id: newId(),
+    name: uniqueTemplateName('New template'),
+    takeoffCountdown: false,
+    includeLanding: true,
+    landingCountdown: false,
+    events: [],
+  };
   draftIsNew = true;
   showEditorView();
 }
@@ -899,12 +993,14 @@ const slider = initSlider({
   nowTimeEl: $('slider-now-time'),
   nowBtn: $('slider-now'),
   takeoffBtn: $('slider-takeoff'),
+  landingBtn: $('slider-landing'),
   minusBtn: $('slider-minus'),
   plusBtn: $('slider-plus'),
   // the device's real zone, not the Julian page's pick (which may be elsewhere)
   getLocalZone: () => deviceZone,
   getExtraZones: () => state.sliderZones,
   getTakeoffMs: () => takeoffMs,
+  getLandingMs: () => landingMs,
 });
 
 // ---- slider zone editor --------------------------------------------------
@@ -1002,6 +1098,31 @@ function init() {
   modeCalBtn.addEventListener('click', () => setDateMode('calendar'));
   modeZuluBtn.addEventListener('click', () => setTimeMode('zulu'));
   modeLocalBtn.addEventListener('click', () => setTimeMode('local'));
+
+  landingToggle.addEventListener('click', () => {
+    state.landingOpen = !state.landingOpen;
+    saveState();
+    computeLanding();
+    if (state.landingOpen) landingInput.focus();
+  });
+  const setLandingMode = (mode) => {
+    state.landingMode = mode;
+    // each mode keeps its own entry; show it even if the box has focus
+    landingInput.value = mode === 'zulu' ? state.landingZulu : state.landingDuration;
+    saveState();
+    computeAll();
+  };
+  modeLZuluBtn.addEventListener('click', () => setLandingMode('zulu'));
+  modeLDurBtn.addEventListener('click', () => setLandingMode('duration'));
+  landingInput.addEventListener('input', () => {
+    if (state.landingMode === 'zulu') state.landingZulu = landingInput.value;
+    else state.landingDuration = landingInput.value;
+    saveState();
+    computeAll();
+  });
+  tplLandingInclude.addEventListener('change', () => {
+    draft.includeLanding = tplLandingInclude.checked;
+  });
 
   createZonePicker({
     input: zoneInput,

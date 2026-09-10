@@ -2,8 +2,8 @@
 // line. The line is the selected instant; bars carry local-day segments
 // whose widths come from real midnight boundaries (23/25 h across DST),
 // tinted by calendar day with the night hours darker.
-import * as T from './time-engine.js?v=0.4.7';
-import { zoneCoords } from './zone-coords.js?v=0.4.7';
+import * as T from './time-engine.js?v=0.4.8';
+import { zoneCoords } from './zone-coords.js?v=0.4.8';
 
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
@@ -22,8 +22,8 @@ const VELOCITY_WINDOW = 100;         // ms of pointer history used for the fling
 const GREENWICH = [51.48, 0];        // Zulu has no place; shade its nights by Greenwich
 
 export function initSlider({
-  stage, rowsEl, nowLine, nowTimeEl, nowBtn, takeoffBtn, minusBtn, plusBtn,
-  getLocalZone, getExtraZones, getTakeoffMs,
+  stage, rowsEl, nowLine, nowTimeEl, nowBtn, takeoffBtn, landingBtn, minusBtn, plusBtn,
+  getLocalZone, getExtraZones, getTakeoffMs, getLandingMs,
 }) {
   let sliderT = null;    // selected instant (ms epoch)
   let mode = 'now';      // 'now' follows the clock, 'takeoff' sits on it, null = free
@@ -35,7 +35,8 @@ export function initSlider({
   const snapTo = (ms, step) => Math.round(ms / step) * step;
   const nowMin = () => snapTo(Date.now(), MINUTE);
   let fling = null;      // { v: slider ms per real ms, last: performance.now(), pos: float ms }
-  let exactReadout = false; // ±1 / Takeoff show the exact minute; sliding rounds again
+  let exactReadout = false; // ±1 / Takeoff / Landing show the exact minute; sliding rounds again
+  const shownT = () => (exactReadout ? sliderT : snapTo(sliderT, READOUT_STEP));
 
   function rowDefs() {
     return [
@@ -122,8 +123,7 @@ export function initSlider({
     for (const row of rows) {
       row.strip.style.transform = `translateX(${shift}px)`;
 
-      const shown = exactReadout ? sliderT : snapTo(sliderT, READOUT_STEP);
-      row.timeEl.textContent = T.zonedParts(shown, row.zone).hhmm;
+      row.timeEl.textContent = T.zonedParts(shownT(), row.zone).hhmm;
       const abbr = T.zoneDisplayName(sliderT, row.zone);
       row.subEl.textContent = [
         abbr !== 'UTC' ? abbr : null,
@@ -165,6 +165,7 @@ export function initSlider({
 
     nowBtn.classList.toggle('active', mode === 'now');
     takeoffBtn.classList.toggle('active', mode === 'takeoff');
+    landingBtn.classList.toggle('active', mode === 'landing');
   }
 
   function schedule() {
@@ -258,11 +259,17 @@ export function initSlider({
     const t = getTakeoffMs();
     if (t !== null) setT(t, 'takeoff', true);
   });
+  landingBtn.addEventListener('click', () => {
+    const t = getLandingMs();
+    if (t !== null) setT(t, 'landing', true);
+  });
+  // ±1 steps from the time the readouts show, so one tap always reads
+  // as exactly one minute
   minusBtn.addEventListener('click', () => {
-    if (sliderT !== null) setT(sliderT - MINUTE, null, true);
+    if (sliderT !== null) setT(shownT() - MINUTE, null, true);
   });
   plusBtn.addEventListener('click', () => {
-    if (sliderT !== null) setT(sliderT + MINUTE, null, true);
+    if (sliderT !== null) setT(shownT() + MINUTE, null, true);
   });
 
   window.addEventListener('resize', () => {
@@ -299,6 +306,7 @@ export function initSlider({
       seededFrom = takeoff;
     }
     takeoffBtn.disabled = takeoff === null;
+    landingBtn.disabled = getLandingMs() === null;
     buildRows();
     buildSegments();
     render();

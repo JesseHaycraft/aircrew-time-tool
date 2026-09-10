@@ -5,7 +5,7 @@ import {
   parseOffset, offsetToHMM, resolveJulianYear, makeUtcInstant,
   zonedParts, isValidZone, buildCopyText,
   zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName, zoneWallToUtc,
-  daySegments, formatCountdown, zoneRegionName, sunEvents, nightIntervals,
+  daySegments, formatCountdown, zoneRegionName, sunEvents, nightIntervals, parseDuration,
 } from '../js/time-engine.js';
 
 test('leap years', () => {
@@ -255,4 +255,19 @@ test('night intervals clip and chain across days', () => {
   assert.deepEqual(pn, [[Date.UTC(2026, 11, 20), Date.UTC(2026, 11, 22)]]);
   // midnight sun → no night at all
   assert.deepEqual(nightIntervals(Date.UTC(2026, 5, 20), Date.UTC(2026, 5, 22), 69.65, 18.96), []);
+});
+
+test('duration parsing', () => {
+  assert.equal(parseDuration('8:35'), 515);
+  assert.equal(parseDuration('8+35'), 515);
+  assert.equal(parseDuration('0835'), 515);
+  assert.equal(parseDuration('835'), 515);
+  assert.equal(parseDuration('12:00'), 720);
+  assert.equal(parseDuration('45'), 45);
+  assert.equal(parseDuration('0:05'), 5);
+  assert.equal(parseDuration('8:60'), null);
+  assert.equal(parseDuration('0'), null);
+  assert.equal(parseDuration('0:00'), null);
+  assert.equal(parseDuration(''), null);
+  assert.equal(parseDuration('abc'), null);
 });

@@ -7,7 +7,7 @@
 <meta name="description" content="Convert Julian day + Zulu takeoff times into local event timelines for flight crews.">
 <meta name="theme-color" content="#0b0e13">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%230b0e13'/%3E%3Ctext%20x='32'%20y='46'%20font-size='38'%20font-family='monospace'%20font-weight='bold'%20text-anchor='middle'%20fill='%23f5b83d'%3EZ%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=0.4.7">
+<link rel="stylesheet" href="css/style.css?v=0.4.8">
 </head>
 <body>
 <header>
@@ -38,6 +38,29 @@
         </div>
         <input id="ztime" inputmode="numeric" placeholder="0530" maxlength="5" autocomplete="off">
       </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <button id="landing-toggle" type="button" class="card-toggle" aria-expanded="false" aria-controls="landing-body">
+      <h2>Landing (optional)</h2>
+      <span class="chev" aria-hidden="true">&rsaquo;</span>
+    </button>
+    <div id="landing-body" hidden>
+      <div class="inputs-row">
+        <div class="input-group">
+          <div class="input-top mode-toggle">
+            <button id="mode-lzulu" type="button">Zulu</button>
+            <button id="mode-ldur" type="button">Duration</button>
+          </div>
+          <input id="landing-input" inputmode="numeric" placeholder="1205" maxlength="5" autocomplete="off">
+        </div>
+        <div class="input-group">
+          <div id="landing-calc-label" class="input-top">&nbsp;</div>
+          <div id="landing-calc" class="landing-calc"></div>
+        </div>
+      </div>
+      <p class="hint">Zulu: landing time as <code>HHMM</code>, on the takeoff day or the next. Duration: flight time as <code>8:35</code> or <code>0835</code>; plain numbers are minutes.</p>
     </div>
   </section>
 
@@ -86,6 +109,7 @@
         <div class="slider-jump">
           <button id="slider-now" type="button" class="ghost">Now</button>
           <button id="slider-takeoff" type="button" class="ghost" disabled>Takeoff</button>
+          <button id="slider-landing" type="button" class="ghost" disabled>Landing</button>
         </div>
         <button id="slider-plus" type="button" class="ghost step">+1</button>
       </div>
@@ -159,6 +183,14 @@
         <span id="tpl-takeoff-cd" class="tpl-takeoff-cd"></span>
         <span class="h-sp"></span>
       </div>
+      <div class="tpl-takeoff-row">
+        <label class="tpl-takeoff-text tpl-landing-text">
+          <input type="checkbox" id="tpl-landing-include">
+          <span>Landing &mdash; when a landing time is set</span>
+        </label>
+        <span id="tpl-landing-cd" class="tpl-takeoff-cd"></span>
+        <span class="h-sp"></span>
+      </div>
       <div class="row-actions">
         <button id="tpl-add-event" type="button">+ Add event</button>
       </div>
@@ -174,6 +206,6 @@
   <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues/new?labels=enhancement" target="_blank" rel="noopener">Suggest changes</a> &middot;
   <span>All times are computed on your device. No data is shared over the internet.</span>
 </footer>
-<script type="module" src="js/app.js?v=0.4.7"></script>
+<script type="module" src="js/app.js?v=0.4.8"></script>
 </body>
 </html>

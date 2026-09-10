@@ -48,6 +48,20 @@ export function parseOffset(input) {
   return null;
 }
 
+// Flight-time style duration → minutes: "8:35", "8+35", "0835", "835";
+// plain 1–2 digit numbers are minutes. Null when unreadable or zero.
+export function parseDuration(input) {
+  const s = String(input).trim();
+  let h = null;
+  let m = null;
+  let x = s.match(/^(\d{1,2})[:+.](\d{2})$/) || s.match(/^(\d{1,2})(\d{2})$/);
+  if (x) { h = Number(x[1]); m = Number(x[2]); }
+  else if (/^\d{1,2}$/.test(s)) { h = 0; m = Number(s); }
+  if (h === null || m > 59) return null;
+  const total = h * 60 + m;
+  return total > 0 ? total : null;
+}
+
 // Signed minutes → "-2:30" / "+0:45" / "0:00".
 export function offsetToHMM(minutes) {
   const sign = minutes < 0 ? '-' : minutes > 0 ? '+' : '';
