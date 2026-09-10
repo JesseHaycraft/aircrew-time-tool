@@ -2,8 +2,8 @@
 // line. The line is the selected instant; bars carry local-day segments
 // whose widths come from real midnight boundaries (23/25 h across DST),
 // tinted by calendar day with the night hours darker.
-import * as T from './time-engine.js?v=0.4.6';
-import { zoneCoords } from './zone-coords.js?v=0.4.6';
+import * as T from './time-engine.js?v=0.4.7';
+import { zoneCoords } from './zone-coords.js?v=0.4.7';
 
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
@@ -15,7 +15,7 @@ const REBUILD_MS = 12 * HOUR;        // rebuild when the drag strays this far
 const LABEL_GAP_R = 10;              // px from the cursor line to a label on its right
 const LABEL_GAP_L = 20;              // px from a label on the left to the cursor line
 const LABEL_INSET = 16;              // px from a day's end to its label when off the cursor
-const FLING_TAU = 2000;              // ms; velocity decays by e every this long
+const FLING_TAU = 500;               // ms; velocity decays by e every this long
 const FLING_MIN_PX_S = 50;           // slower releases than this don't fling
 const FLING_STOP_PX_S = 3;           // coasting ends below this speed
 const VELOCITY_WINDOW = 100;         // ms of pointer history used for the fling velocity
@@ -35,6 +35,7 @@ export function initSlider({
   const snapTo = (ms, step) => Math.round(ms / step) * step;
   const nowMin = () => snapTo(Date.now(), MINUTE);
   let fling = null;      // { v: slider ms per real ms, last: performance.now(), pos: float ms }
+  let exactReadout = false; // ±1 / Takeoff show the exact minute; sliding rounds again
 
   function rowDefs() {
     return [
@@ -121,7 +122,8 @@ export function initSlider({
     for (const row of rows) {
       row.strip.style.transform = `translateX(${shift}px)`;
 
-      row.timeEl.textContent = T.zonedParts(snapTo(sliderT, READOUT_STEP), row.zone).hhmm;
+      const shown = exactReadout ? sliderT : snapTo(sliderT, READOUT_STEP);
+      row.timeEl.textContent = T.zonedParts(shown, row.zone).hhmm;
       const abbr = T.zoneDisplayName(sliderT, row.zone);
       row.subEl.textContent = [
         abbr !== 'UTC' ? abbr : null,
@@ -173,10 +175,11 @@ export function initSlider({
   }
 
   // The slider is always at 1-minute precision; only the readouts round.
-  function setT(ms, newMode = null) {
+  function setT(ms, newMode = null, exact = false) {
     fling = null;
     sliderT = snapTo(ms, MINUTE);
     mode = newMode;
+    exactReadout = exact;
     if (Math.abs(sliderT - t0) > REBUILD_MS) buildSegments();
     schedule();
   }
@@ -195,6 +198,7 @@ export function initSlider({
     fling.v *= Math.exp(-dt / FLING_TAU);
     sliderT = snapTo(fling.pos, MINUTE);
     mode = null;
+    exactReadout = false;
     if (Math.abs(fling.v) * PX_PER_MS * 1000 < FLING_STOP_PX_S) {
       fling = null;
     } else {
@@ -252,13 +256,13 @@ export function initSlider({
   nowBtn.addEventListener('click', () => setT(nowMin(), 'now'));
   takeoffBtn.addEventListener('click', () => {
     const t = getTakeoffMs();
-    if (t !== null) setT(t, 'takeoff');
+    if (t !== null) setT(t, 'takeoff', true);
   });
   minusBtn.addEventListener('click', () => {
-    if (sliderT !== null) setT(sliderT - MINUTE);
+    if (sliderT !== null) setT(sliderT - MINUTE, null, true);
   });
   plusBtn.addEventListener('click', () => {
-    if (sliderT !== null) setT(sliderT + MINUTE);
+    if (sliderT !== null) setT(sliderT + MINUTE, null, true);
   });
 
   window.addEventListener('resize', () => {
