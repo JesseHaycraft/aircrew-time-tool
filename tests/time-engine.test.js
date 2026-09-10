@@ -5,7 +5,7 @@ import {
   parseOffset, offsetToHMM, resolveJulianYear, makeUtcInstant,
   zonedParts, isValidZone, buildCopyText,
   zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName, zoneWallToUtc,
-  daySegments, formatCountdown,
+  daySegments, formatCountdown, zoneRegionName, sunEvents, nightIntervals,
 } from '../js/time-engine.js';
 
 test('leap years', () => {
@@ -209,4 +209,50 @@ test('countdown formatting', () => {
   assert.equal(formatCountdown(t, t - (29 * 60 + 20) * min), 'in 1day 5hrs 20mins');
   assert.equal(formatCountdown(t, t + 7 * min), '7mins ago');
   assert.equal(formatCountdown(t, t + (50 * 60) * min), '2days 2hrs ago');
+});
+
+test('region zone names', () => {
+  const t = Date.UTC(2026, 8, 10);
+  assert.equal(zoneRegionName(t, 'America/New_York'), 'America - Eastern');
+  assert.equal(zoneRegionName(t, 'America/Phoenix'), 'America - Mountain');
+  assert.equal(zoneRegionName(t, 'Pacific/Guam'), 'Pacific - Chamorro');
+  assert.equal(zoneRegionName(t, 'Europe/London'), 'Europe - United Kingdom');
+  assert.equal(zoneRegionName(t, 'Asia/Tokyo'), 'Asia - Japan');
+  assert.equal(zoneRegionName(t, 'Pacific/Honolulu'), 'Pacific - Hawaii-Aleutian');
+});
+
+const near = (actual, expected, tolMin, label) => {
+  const diff = Math.abs(actual - expected) / 60_000;
+  assert.ok(diff <= tolMin, `${label}: off by ${diff.toFixed(1)} min`);
+};
+
+test('sunrise and sunset', () => {
+  // New York, 10 Sep 2026: sunrise ≈ 06:33 EDT (10:33Z), sunset ≈ 19:15 EDT (23:15Z)
+  const ny = sunEvents(Date.UTC(2026, 8, 10), 40.71, -74.01);
+  near(ny.sunrise, Date.UTC(2026, 8, 10, 10, 33), 8, 'NY sunrise');
+  near(ny.sunset, Date.UTC(2026, 8, 10, 23, 15), 8, 'NY sunset');
+  // Honolulu, 10 Sep 2026 UTC day: sunrise ≈ 06:14 HST (16:14Z), sunset ≈ 18:37 HST (04:37Z next day)
+  const hnl = sunEvents(Date.UTC(2026, 8, 10), 21.31, -157.86);
+  near(hnl.sunrise, Date.UTC(2026, 8, 10, 16, 14), 8, 'HNL sunrise');
+  near(hnl.sunset, Date.UTC(2026, 8, 11, 4, 37), 8, 'HNL sunset');
+  // Tromsø: midnight sun in June, polar night in December
+  assert.equal(sunEvents(Date.UTC(2026, 5, 21), 69.65, 18.96).polar, 'day');
+  assert.equal(sunEvents(Date.UTC(2026, 11, 21), 69.65, 18.96).polar, 'night');
+});
+
+test('night intervals clip and chain across days', () => {
+  const from = Date.UTC(2026, 8, 10, 0, 0);
+  const to = Date.UTC(2026, 8, 12, 0, 0);
+  const n = nightIntervals(from, to, 40.71, -74.01);
+  assert.equal(n.length, 3);
+  assert.equal(n[0][0], from);                                  // night in progress at start
+  near(n[0][1], Date.UTC(2026, 8, 10, 10, 33), 8, 'first dawn');
+  near(n[1][0], Date.UTC(2026, 8, 10, 23, 15), 8, 'dusk');
+  near(n[1][1], Date.UTC(2026, 8, 11, 10, 34), 8, 'second dawn');
+  assert.equal(n[2][1], to);                                    // clipped at the end
+  // whole window inside a polar night → one full-span interval
+  const pn = nightIntervals(Date.UTC(2026, 11, 20), Date.UTC(2026, 11, 22), 69.65, 18.96);
+  assert.deepEqual(pn, [[Date.UTC(2026, 11, 20), Date.UTC(2026, 11, 22)]]);
+  // midnight sun → no night at all
+  assert.deepEqual(nightIntervals(Date.UTC(2026, 5, 20), Date.UTC(2026, 5, 22), 69.65, 18.96), []);
 });

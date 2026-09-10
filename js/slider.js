@@ -1,32 +1,37 @@
 // Slider page: stacked per-zone day bars dragged under a fixed center
 // line. The line is the selected instant; bars carry local-day segments
-// whose widths come from real midnight boundaries (23/25 h across DST).
-import * as T from './time-engine.js?v=0.4.2';
+// whose widths come from real midnight boundaries (23/25 h across DST),
+// tinted by calendar day with the night hours darker.
+import * as T from './time-engine.js?v=0.4.3';
+import { zoneCoords } from './zone-coords.js?v=0.4.3';
 
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
-const PX_PER_HOUR = 48;              // ≈8 hours visible on a phone screen
+const PX_PER_HOUR = 32;              // ≈12 hours visible on a phone screen
 const PX_PER_MS = PX_PER_HOUR / HOUR;
-const COVER_MS = 20 * HOUR;          // segments are built for t0 ± this
-const REBUILD_MS = 10 * HOUR;        // rebuild when the drag strays this far
+const DRAG_STEP = 5 * MINUTE;        // drag/wheel resolution; ± buttons do 1 min
+const COVER_MS = 24 * HOUR;          // segments are built for t0 ± this
+const REBUILD_MS = 12 * HOUR;        // rebuild when the drag strays this far
+const LABEL_GAP = 18;                // px between weekday and date, cursor passes through
 
 export function initSlider({
-  stage, rowsEl, nowBtn, takeoffBtn, minusBtn, plusBtn,
-  getLocalZone, getExtraZones, getTakeoffMs,
+  stage, rowsEl, nowLine, nowTimeEl, nowBtn, takeoffBtn, minusBtn, plusBtn,
+  getExtraZones, getTakeoffMs,
 }) {
-  let sliderT = null;    // selected instant (ms epoch, minute-snapped)
+  let sliderT = null;    // selected instant (ms epoch)
+  let mode = 'now';      // 'now' follows the clock, 'takeoff' sits on it, null = free
   let seededFrom = null; // takeoff value the slider last seeded itself from
   let t0 = null;         // reference instant the strips were built around
   let rows = [];
   let rafPending = false;
 
-  const snap = (ms) => Math.round(ms / MINUTE) * MINUTE;
+  const snapTo = (ms, step) => Math.round(ms / step) * step;
+  const nowMin = () => snapTo(Date.now(), MINUTE);
 
   function rowDefs() {
     return [
-      { zone: 'UTC', name: 'Zulu', suffix: 'Z' },
-      { zone: getLocalZone(), name: null, suffix: 'L' },
-      ...getExtraZones().map((zone) => ({ zone, name: null, suffix: '' })),
+      { zone: 'UTC', name: 'Zulu' },
+      ...getExtraZones().map((zone) => ({ zone, name: null })),
     ];
   }
 
@@ -42,7 +47,7 @@ export function initSlider({
       label.className = 'sl-label';
       const nameEl = document.createElement('span');
       nameEl.className = 'sl-name';
-      nameEl.textContent = def.name ?? T.zoneLabel(def.zone);
+      nameEl.textContent = def.name ?? T.zoneRegionName(Date.now(), def.zone);
       const subEl = document.createElement('span');
       subEl.className = 'sl-sub';
       label.append(nameEl, subEl);
@@ -58,7 +63,7 @@ export function initSlider({
 
       row.append(info, track);
       rowsEl.append(row);
-      return { ...def, subEl, timeEl, strip, segs: [] };
+      return { ...def, coords: zoneCoords(def.zone), subEl, timeEl, strip, segs: [] };
     });
   }
 
@@ -68,17 +73,30 @@ export function initSlider({
     for (const row of rows) {
       row.strip.replaceChildren();
       row.segs = [];
-      for (const seg of T.daySegments(row.zone, t0 - COVER_MS, t0 + COVER_MS)) {
+      const from = t0 - COVER_MS;
+      const to = t0 + COVER_MS;
+      const nights = row.coords ? T.nightIntervals(from, to, row.coords[0], row.coords[1]) : [];
+      for (const seg of T.daySegments(row.zone, from, to)) {
         const el = document.createElement('div');
-        // day-number parity alternates the two tones (month rollovers may
-        // repeat a tone once; the borders still separate the days)
-        el.className = `sl-seg ${Number(seg.day) % 2 ? 'day-a' : 'day-b'}`;
+        // three tints cycle by calendar day, so the same date shares a
+        // tint on every row
+        el.className = `sl-seg c${((seg.epochDay % 3) + 3) % 3}`;
         const left = (seg.start - t0) * PX_PER_MS + w / 2;
         const width = (seg.end - seg.start) * PX_PER_MS;
         el.style.left = `${left}px`;
         el.style.width = `${width}px`;
-        // weekday and date as separate spans with a center gap, so the
-        // cursor line passes between them when the label sits mid-screen
+        for (const [ns, ne] of nights) {
+          const s = Math.max(ns, seg.start);
+          const e = Math.min(ne, seg.end);
+          if (e <= s) continue;
+          const night = document.createElement('div');
+          night.className = 'sl-night';
+          night.style.left = `${(s - seg.start) * PX_PER_MS}px`;
+          night.style.width = `${(e - s) * PX_PER_MS}px`;
+          el.append(night);
+        }
+        // weekday and date as two equal-width halves around a center gap,
+        // so the cursor line passes exactly between them
         const lab = document.createElement('span');
         lab.className = 'sl-seg-label';
         const wd = document.createElement('span');
@@ -88,9 +106,14 @@ export function initSlider({
         lab.append(wd, dm);
         el.append(lab);
         row.strip.append(el);
-        row.segs.push({ lab, left, width, labW: 0 });
+        row.segs.push({ lab, wd, dm, left, width, labW: 0 });
       }
-      for (const s of row.segs) s.labW = s.lab.offsetWidth;
+      for (const s of row.segs) {
+        const half = Math.ceil(Math.max(s.wd.offsetWidth, s.dm.offsetWidth));
+        s.wd.style.width = `${half}px`;
+        s.dm.style.width = `${half}px`;
+        s.labW = 2 * half + LABEL_GAP;
+      }
     }
   }
 
@@ -101,12 +124,10 @@ export function initSlider({
     for (const row of rows) {
       row.strip.style.transform = `translateX(${shift}px)`;
 
-      const p = T.zonedParts(sliderT, row.zone);
-      row.timeEl.textContent = `${p.hhmm}${row.suffix}`;
-      const name = row.name ?? T.zoneLabel(row.zone);
+      row.timeEl.textContent = T.zonedParts(sliderT, row.zone).hhmm;
       const abbr = T.zoneDisplayName(sliderT, row.zone);
       row.subEl.textContent = [
-        abbr !== name && abbr !== 'UTC' ? abbr : null,
+        abbr !== 'UTC' ? abbr : null,
         T.utcOffsetLabel(sliderT, row.zone),
       ].filter(Boolean).join(' ');
 
@@ -122,6 +143,16 @@ export function initSlider({
         s.lab.style.left = `${lx}px`;
       }
     }
+
+    // dashed cursor on the current time, wherever the slider has gone
+    const now = nowMin();
+    const nx = w / 2 + (now - sliderT) * PX_PER_MS;
+    nowLine.hidden = nx < 0 || nx > w;
+    nowLine.style.left = `${nx}px`;
+    nowTimeEl.textContent = T.zonedParts(now, 'UTC').hhmm;
+
+    nowBtn.classList.toggle('active', mode === 'now');
+    takeoffBtn.classList.toggle('active', mode === 'takeoff');
   }
 
   function schedule() {
@@ -131,8 +162,9 @@ export function initSlider({
     }
   }
 
-  function setT(ms) {
-    sliderT = snap(ms);
+  function setT(ms, newMode = null) {
+    sliderT = ms;
+    mode = newMode;
     if (Math.abs(sliderT - t0) > REBUILD_MS) buildSegments();
     schedule();
   }
@@ -150,7 +182,7 @@ export function initSlider({
   });
   stage.addEventListener('pointermove', (e) => {
     if (dragId !== e.pointerId) return;
-    setT(dragStartT - (e.clientX - dragStartX) / PX_PER_MS);
+    setT(snapTo(dragStartT - (e.clientX - dragStartX) / PX_PER_MS, DRAG_STEP));
   });
   const endDrag = (e) => {
     if (dragId !== e.pointerId) return;
@@ -163,13 +195,13 @@ export function initSlider({
     if (sliderT === null) return;
     e.preventDefault();
     const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-    setT(sliderT + d / PX_PER_MS / 4);
+    setT(snapTo(sliderT + d / PX_PER_MS / 4, DRAG_STEP));
   }, { passive: false });
 
-  nowBtn.addEventListener('click', () => setT(Date.now()));
+  nowBtn.addEventListener('click', () => setT(nowMin(), 'now'));
   takeoffBtn.addEventListener('click', () => {
     const t = getTakeoffMs();
-    if (t !== null) setT(t);
+    if (t !== null) setT(snapTo(t, MINUTE), 'takeoff');
   });
   minusBtn.addEventListener('click', () => {
     if (sliderT !== null) setT(sliderT - MINUTE);
@@ -184,18 +216,33 @@ export function initSlider({
     schedule();
   });
 
-  // Called every time the page becomes visible. Re-seeds to the takeoff
-  // when a new one has been computed since the last look; otherwise the
-  // slider stays where it was left.
+  // Once a minute (checked more often, cheap): move the dashed current-
+  // time cursor and, in Now mode, the slider with it.
+  let lastTick = null;
+  setInterval(() => {
+    if (sliderT === null || !rows.length || document.hidden || stage.offsetParent === null) return;
+    const now = nowMin();
+    if (now === lastTick) return;
+    lastTick = now;
+    if (mode === 'now') setT(now, 'now');
+    else schedule();
+  }, 5_000);
+
+  // Called every time the page becomes visible. A new session starts on
+  // Now; a takeoff computed since the slider was last looked at re-seeds
+  // it; otherwise the slider stays where it was left.
   function open() {
     const takeoff = getTakeoffMs();
-    if (takeoff !== null && takeoff !== seededFrom) {
-      sliderT = snap(takeoff);
+    if (sliderT === null) {
+      sliderT = nowMin();
+      mode = 'now';
       seededFrom = takeoff;
-    } else if (sliderT === null) {
-      sliderT = snap(Date.now());
+    } else if (takeoff !== null && takeoff !== seededFrom) {
+      sliderT = snapTo(takeoff, MINUTE);
+      mode = 'takeoff';
+      seededFrom = takeoff;
     }
-    takeoffBtn.disabled = getTakeoffMs() === null;
+    takeoffBtn.disabled = takeoff === null;
     buildRows();
     buildSegments();
     render();

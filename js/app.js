@@ -1,10 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.4.2';
-import { initSlider } from './slider.js?v=0.4.2';
+import * as T from './time-engine.js?v=0.4.3';
+import { initSlider } from './slider.js?v=0.4.3';
 
-const VERSION = 'v0.4.2';
+const VERSION = 'v0.4.3';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -66,13 +66,20 @@ function loadState() {
   const activeTemplateId = templates.some((t) => t.id === s.activeTemplateId)
     ? s.activeTemplateId
     : (templates[0]?.id ?? null);
+  const sliderZones = Array.isArray(s.sliderZones)
+    ? [...new Set(s.sliderZones.filter((z) => typeof z === 'string' && T.isValidZone(z)))]
+    : [];
+  // The slider used to pin the Julian-page zone; now only Zulu is fixed.
+  // Seed that zone as an ordinary (deletable) row once, so nobody loses it.
+  if (s.sliderZonesInitialized !== true && zone !== 'UTC' && !sliderZones.includes(zone)) {
+    sliderZones.unshift(zone);
+  }
   return {
     doy: typeof s.doy === 'string' ? s.doy : '',
     time: typeof s.time === 'string' ? s.time : '',
     page: s.page === 'slider' ? 'slider' : 'julian',
-    sliderZones: Array.isArray(s.sliderZones)
-      ? [...new Set(s.sliderZones.filter((z) => typeof z === 'string' && T.isValidZone(z)))]
-      : [],
+    sliderZones,
+    sliderZonesInitialized: true,
     dateMode: s.dateMode === 'calendar' ? 'calendar' : 'julian',
     timeMode: s.timeMode === 'local' ? 'local' : 'zulu',
     calDate: typeof s.calDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.calDate)
@@ -441,12 +448,14 @@ function tickClock() {
     span.textContent = text;
     return span;
   };
-  clockEl.replaceChildren(
+  const grid = document.createElement('span');
+  grid.className = 'clock-grid';
+  grid.append(
     label,
     part(`${zp.hhmm}Z (${zp.weekday} ${Number(zp.day)})`),
-    ' ',
-    part(`/ ${lp.hhmm}L (${lp.weekday} ${Number(lp.day)}) ${T.zoneLabel(state.zone)}`),
+    part(`${lp.hhmm}L (${lp.weekday} ${Number(lp.day)}) ${T.zoneLabel(state.zone)}`),
   );
+  clockEl.replaceChildren(grid);
   if (!timelineTable.hidden) {
     for (const span of timelineBody.querySelectorAll('.countdown')) {
       span.textContent = T.formatCountdown(Number(span.dataset.target), now);
@@ -886,11 +895,12 @@ const szAddInput = $('sz-add');
 const slider = initSlider({
   stage: $('slider-stage'),
   rowsEl: $('slider-rows'),
+  nowLine: $('slider-now-line'),
+  nowTimeEl: $('slider-now-time'),
   nowBtn: $('slider-now'),
   takeoffBtn: $('slider-takeoff'),
   minusBtn: $('slider-minus'),
   plusBtn: $('slider-plus'),
-  getLocalZone: () => state.zone,
   getExtraZones: () => state.sliderZones,
   getTakeoffMs: () => takeoffMs,
 });
@@ -901,7 +911,6 @@ function renderSzList() {
   szList.replaceChildren();
   const entries = [
     { zone: 'UTC', title: 'Zulu', locked: true },
-    { zone: state.zone, locked: true },
     ...state.sliderZones.map((zone) => ({ zone, locked: false })),
   ];
   for (const r of entries) {
@@ -911,7 +920,7 @@ function renderSzList() {
     main.className = 'sz-main';
     const name = document.createElement('span');
     name.className = 'sz-name';
-    name.textContent = r.title ?? T.zoneLabel(r.zone);
+    name.textContent = r.title ?? T.zoneRegionName(Date.now(), r.zone);
     const sub = document.createElement('span');
     sub.className = 'sz-sub';
     sub.textContent = `${r.zone} · ${T.utcOffsetLabel(Date.now(), r.zone)}`;
@@ -1031,9 +1040,9 @@ function init() {
   createZonePicker({
     input: szAddInput,
     menu: $('sz-suggest'),
-    isActive: (zid) => zid === 'UTC' || zid === state.zone || state.sliderZones.includes(zid),
+    isActive: (zid) => zid === 'UTC' || state.sliderZones.includes(zid),
     onPick: (zid) => {
-      if (zid !== 'UTC' && zid !== state.zone && !state.sliderZones.includes(zid)) {
+      if (zid !== 'UTC' && !state.sliderZones.includes(zid)) {
         state.sliderZones.push(zid);
         saveState();
       }

@@ -109,6 +109,7 @@ function formatterFor(zone, kind = 'parts') {
       },
       offset: { timeZone: zone, timeZoneName: 'shortOffset' },
       long: { timeZone: zone, timeZoneName: 'long' },
+      generic: { timeZone: zone, timeZoneName: 'longGeneric' },
       wall: {
         timeZone: zone, hourCycle: 'h23',
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -188,7 +189,9 @@ export function daySegments(zone, fromMs, toMs) {
     let end = midnightOf(start + 36 * 3_600_000);
     if (end <= start) end = start + MS_PER_DAY;
     const p = zonedParts(midday, zone);
-    segs.push({ start, end, weekday: p.weekday, day: p.day, month: p.month });
+    const wp = wallParts(midday, zone);
+    const epochDay = Math.floor(Date.UTC(wp.year, wp.month - 1, wp.day) / MS_PER_DAY);
+    segs.push({ start, end, weekday: p.weekday, day: p.day, month: p.month, epochDay });
     start = end;
   }
   return segs;
@@ -197,6 +200,88 @@ export function daySegments(zone, fromMs, toMs) {
 // "America/New_York" → "New York"
 export function zoneLabel(zone) {
   return zone.split('/').pop().replaceAll('_', ' ');
+}
+
+// "America/New_York" → "America - Eastern", "Pacific/Guam" → "Pacific -
+// Chamorro": the IANA region plus the zone's generic (non-DST) name with
+// the "Time" / "Standard Time" tail dropped. Zones the platform has no
+// generic name for ("GMT+10") fall back to the city.
+export function zoneRegionName(ms, zone) {
+  const region = zone.includes('/') ? zone.split('/')[0].replaceAll('_', ' ') : '';
+  let generic = timeZonePart(ms, zone, 'generic')
+    .replace(/\s+(Standard|Daylight|Summer)\s+Time$/i, '')
+    .replace(/\s+Time$/i, '');
+  if (!generic || /^(GMT|UTC)/.test(generic)) generic = zoneLabel(zone);
+  return region ? `${region} - ${generic}` : generic;
+}
+
+// ---- sunrise / sunset (NOAA solar calculator equations) ----
+const rad = (d) => (d * Math.PI) / 180;
+const deg = (r) => (r * 180) / Math.PI;
+
+// Sunrise and sunset (ms epoch) for the UTC calendar day starting at
+// utcMidnightMs, seen from lat/lon. Polar day/night return { polar }.
+// Uses the standard 90.833° zenith (refraction + solar radius).
+export function sunEvents(utcMidnightMs, lat, lon) {
+  const jc = (utcMidnightMs / MS_PER_DAY + 2440587.5 - 2451545) / 36525;
+  const L0 = (280.46646 + jc * (36000.76983 + jc * 0.0003032)) % 360;
+  const M = 357.52911 + jc * (35999.05029 - 0.0001537 * jc);
+  const e = 0.016708634 - jc * (0.000042037 + 0.0000001267 * jc);
+  const Mr = rad(M);
+  const C = Math.sin(Mr) * (1.914602 - jc * (0.004817 + 0.000014 * jc))
+    + Math.sin(2 * Mr) * (0.019993 - 0.000101 * jc)
+    + Math.sin(3 * Mr) * 0.000289;
+  const omega = rad(125.04 - 1934.136 * jc);
+  const lambda = rad(L0 + C - 0.00569 - 0.00478 * Math.sin(omega));
+  const eps0 = 23 + (26 + (21.448 - jc * (46.815 + jc * (0.00059 - jc * 0.001813))) / 60) / 60;
+  const eps = rad(eps0 + 0.00256 * Math.cos(omega));
+  const decl = Math.asin(Math.sin(eps) * Math.sin(lambda));
+  const y = Math.tan(eps / 2) ** 2;
+  const L0r = rad(L0);
+  const eqTime = 4 * deg(
+    y * Math.sin(2 * L0r) - 2 * e * Math.sin(Mr)
+    + 4 * e * y * Math.sin(Mr) * Math.cos(2 * L0r)
+    - 0.5 * y * y * Math.sin(4 * L0r) - 1.25 * e * e * Math.sin(2 * Mr),
+  );
+  const latr = rad(lat);
+  const cosHA = Math.cos(rad(90.833)) / (Math.cos(latr) * Math.cos(decl)) - Math.tan(latr) * Math.tan(decl);
+  if (cosHA > 1) return { polar: 'night' };
+  if (cosHA < -1) return { polar: 'day' };
+  const ha = deg(Math.acos(cosHA));
+  const noonMin = 720 - 4 * lon - eqTime;
+  return {
+    sunrise: utcMidnightMs + (noonMin - 4 * ha) * 60_000,
+    sunset: utcMidnightMs + (noonMin + 4 * ha) * 60_000,
+  };
+}
+
+// Night-time spans [start, end] between fromMs and toMs at lat/lon:
+// each sunset to the following sunrise, polar nights as whole days.
+export function nightIntervals(fromMs, toMs, lat, lon) {
+  const first = Math.floor(fromMs / MS_PER_DAY) - 1;
+  const last = Math.floor(toMs / MS_PER_DAY) + 1;
+  const ev = new Map();
+  for (let d = first; d <= last + 1; d++) ev.set(d, sunEvents(d * MS_PER_DAY, lat, lon));
+  const raw = [];
+  for (let d = first; d <= last; d++) {
+    const cur = ev.get(d);
+    const next = ev.get(d + 1);
+    if (cur.polar === 'night') { raw.push([d * MS_PER_DAY, (d + 1) * MS_PER_DAY]); continue; }
+    if (cur.polar === 'day') continue;
+    const end = next.sunrise ?? (next.polar === 'night' ? (d + 1) * MS_PER_DAY : cur.sunset);
+    if (end > cur.sunset) raw.push([cur.sunset, end]);
+  }
+  raw.sort((a, b) => a[0] - b[0]);
+  const out = [];
+  for (const [s, e] of raw) {
+    const cs = Math.max(s, fromMs);
+    const ce = Math.min(e, toMs);
+    if (ce <= cs) continue;
+    const prev = out[out.length - 1];
+    if (prev && cs <= prev[1]) prev[1] = Math.max(prev[1], ce);
+    else out.push([cs, ce]);
+  }
+  return out;
 }
 
 function timeZonePart(ms, zone, kind) {
