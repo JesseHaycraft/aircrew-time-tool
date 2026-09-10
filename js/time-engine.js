@@ -55,6 +55,20 @@ export function offsetToHMM(minutes) {
   return `${sign}${Math.floor(abs / 60)}:${String(abs % 60).padStart(2, '0')}`;
 }
 
+// Minute-resolution countdown to an instant: "in 2:34", "in 1d 05:20",
+// "0:07 ago", or "now" within half a minute either side. Rounded, so a
+// tick fired just after the minute boundary still reads a whole minute.
+export function formatCountdown(targetMs, nowMs) {
+  const diffMin = Math.round((targetMs - nowMs) / 60_000);
+  if (diffMin === 0) return 'now';
+  const abs = Math.abs(diffMin);
+  const days = Math.floor(abs / 1440);
+  const h = Math.floor((abs % 1440) / 60);
+  const mm = String(abs % 60).padStart(2, '0');
+  const body = days > 0 ? `${days}d ${h}:${mm}` : `${h}:${mm}`;
+  return diffMin > 0 ? `in ${body}` : `${body} ago`;
+}
+
 // Pick the year a bare day-of-year refers to: the nearest occurrence that is
 // not more than graceDays in the past. Skips years where the day doesn't
 // exist (day 366 outside leap years). Returns null if nothing matches.

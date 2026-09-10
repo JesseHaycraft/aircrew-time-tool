@@ -1,10 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.3.2';
-import { initSlider } from './slider.js?v=0.3.2';
+import * as T from './time-engine.js?v=0.4.0';
+import { initSlider } from './slider.js?v=0.4.0';
 
-const VERSION = 'v0.3.2';
+const VERSION = 'v0.4.0';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -19,7 +19,12 @@ const newId = () => (crypto.randomUUID
   : `id-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 function makeDefaultTemplate() {
-  return { id: newId(), name: 'Standard', events: DEFAULT_TEMPLATE_EVENTS.map((e) => ({ ...e })) };
+  return {
+    id: newId(),
+    name: 'Standard',
+    takeoffCountdown: false,
+    events: DEFAULT_TEMPLATE_EVENTS.map((e) => ({ ...e })),
+  };
 }
 
 const todayUtcStr = () => new Date().toISOString().slice(0, 10);
@@ -35,9 +40,10 @@ function sanitizeTemplates(raw) {
     out.push({
       id: typeof t.id === 'string' ? t.id : newId(),
       name: t.name,
+      takeoffCountdown: t.takeoffCountdown === true,
       events: t.events
         .filter((e) => e && typeof e.name === 'string' && typeof e.offset === 'string')
-        .map((e) => ({ name: e.name, offset: e.offset })),
+        .map((e) => ({ name: e.name, offset: e.offset, countdown: e.countdown === true })),
     });
   }
   return out;
@@ -93,9 +99,13 @@ function activeTemplate() {
 function timelineEvents() {
   const tpl = activeTemplate();
   const events = (tpl ? tpl.events : [])
-    .map((e) => ({ name: e.name.trim() || 'Event', offsetMin: T.parseOffset(e.offset) }))
+    .map((e) => ({
+      name: e.name.trim() || 'Event',
+      offsetMin: T.parseOffset(e.offset),
+      countdown: e.countdown === true,
+    }))
     .filter((e) => e.offsetMin !== null);
-  events.push({ name: 'Takeoff', offsetMin: 0 });
+  events.push({ name: 'Takeoff', offsetMin: 0, countdown: tpl?.takeoffCountdown === true });
   return events.sort((a, b) => a.offsetMin - b.offsetMin);
 }
 
@@ -124,6 +134,7 @@ const tplEditorView = $('tpl-editor-view');
 const tplList = $('tpl-list');
 const tplName = $('tpl-name');
 const tplEvents = $('tpl-events');
+const tplTakeoffCdSlot = $('tpl-takeoff-cd');
 
 // The editor works on a draft copy; Save commits it, ‹ Templates discards.
 let draft = null;
@@ -396,10 +407,33 @@ function renderTimeline() {
     localTd.className = 'time-cell';
     localTd.append(`${lp.hhmm}L`);
     if (showFlags) localTd.append(' ', dayFlag(lp));
+    if (ev.countdown) {
+      const cd = document.createElement('span');
+      cd.className = 'countdown';
+      cd.dataset.target = String(takeoffMs + ev.offsetMin * 60_000);
+      localTd.append(cd);
+    }
     tr.append(localTd);
 
     timelineBody.append(tr);
   }
+  tickCountdowns();
+}
+
+// Countdowns refresh on the wall-clock minute (plus a small margin so the
+// rounding in formatCountdown lands on the new minute), and immediately
+// when the tab comes back to the foreground — background timers throttle.
+let countdownTimer = null;
+function tickCountdowns() {
+  clearTimeout(countdownTimer);
+  const spans = timelineTable.hidden ? [] : timelineBody.querySelectorAll('.countdown');
+  if (!spans.length) return;
+  const now = Date.now();
+  for (const span of spans) {
+    span.textContent = T.formatCountdown(Number(span.dataset.target), now);
+  }
+  if (document.hidden) return;
+  countdownTimer = setTimeout(tickCountdowns, 60_000 - (now % 60_000) + 250);
 }
 
 function computeAll() {
@@ -651,6 +685,7 @@ function renderTemplateList() {
         state.templates.push({
           id: newId(),
           name: uniqueTemplateName(`${t.name} (copy)`),
+          takeoffCountdown: t.takeoffCountdown === true,
           events: t.events.map((e) => ({ ...e })),
         });
         saveState();
@@ -701,6 +736,11 @@ function renderTemplateEditor() {
       markOffsetValidity(offIn, ev.offset);
     });
 
+    const cd = stopwatchToggle(
+      () => ev.countdown === true,
+      (on) => { ev.countdown = on; },
+    );
+
     const del = document.createElement('button');
     del.className = 'row-x';
     del.type = 'button';
@@ -711,9 +751,38 @@ function renderTemplateEditor() {
       renderTemplateEditor();
     });
 
-    row.append(nameIn, offIn, del);
+    row.append(nameIn, offIn, cd, del);
     tplEvents.append(row);
   });
+  tplTakeoffCdSlot.replaceChildren(stopwatchToggle(
+    () => draft.takeoffCountdown === true,
+    (on) => { draft.takeoffCountdown = on; },
+  ));
+}
+
+const STOPWATCH_SVG =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" '
+  + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2"/>'
+  + '<path d="M9.5 2.5h5"/><path d="M12 2.5v3.5"/><path d="M18.5 7.5l1.5-1.5"/></svg>';
+
+// Amber when on (a user choice), grey when off. Tapping flips it.
+function stopwatchToggle(get, set) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'ev-cd';
+  b.innerHTML = STOPWATCH_SVG;
+  const sync = () => {
+    const on = get();
+    b.setAttribute('aria-pressed', String(on));
+    b.title = on ? 'Countdown on — tap to turn off' : 'Show a countdown for this event';
+  };
+  b.addEventListener('click', () => {
+    set(!get());
+    sync();
+  });
+  sync();
+  return b;
 }
 
 function showListView() {
@@ -729,13 +798,18 @@ function showEditorView() {
 }
 
 function openEditorFor(tpl) {
-  draft = { id: tpl.id, name: tpl.name, events: tpl.events.map((e) => ({ ...e })) };
+  draft = {
+    id: tpl.id,
+    name: tpl.name,
+    takeoffCountdown: tpl.takeoffCountdown === true,
+    events: tpl.events.map((e) => ({ ...e })),
+  };
   draftIsNew = false;
   showEditorView();
 }
 
 function openEditorForNew() {
-  draft = { id: newId(), name: uniqueTemplateName('New template'), events: [] };
+  draft = { id: newId(), name: uniqueTemplateName('New template'), takeoffCountdown: false, events: [] };
   draftIsNew = true;
   showEditorView();
 }
@@ -944,12 +1018,15 @@ function init() {
     },
   });
   window.addEventListener('resize', fitZoneInput);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) tickCountdowns();
+  });
 
   tplName.addEventListener('input', () => {
     draft.name = tplName.value;
   });
   $('tpl-add-event').addEventListener('click', () => {
-    draft.events.push({ name: '', offset: '-1:00' });
+    draft.events.push({ name: '', offset: '-1:00', countdown: false });
     renderTemplateEditor();
   });
 

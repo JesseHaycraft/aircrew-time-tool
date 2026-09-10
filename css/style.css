@@ -265,12 +265,23 @@ button.danger:hover { border-color: var(--danger); }
 }
 .ev-head .h-name { flex: 1; }
 .ev-head .h-off { width: 84px; }
+.ev-head .h-cd { width: 36px; }
 .ev-head .h-sp { width: 28px; }
 
 .tpl-events { display: flex; flex-direction: column; gap: 8px; }
 .ev-row { display: flex; gap: 8px; align-items: center; }
 .ev-row .ev-name { flex: 1; min-width: 0; }
 .ev-row .ev-offset { width: 84px; font-family: var(--mono); flex-shrink: 0; }
+
+/* stopwatch countdown toggle: amber = on (a user choice), grey = off */
+.ev-cd {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+}
+.ev-cd:hover { border-color: var(--accent); color: var(--text); }
+.ev-cd[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: #1c2432; }
 
 .row-x {
   border: none; background: transparent; color: var(--muted);
@@ -286,6 +297,8 @@ button.danger:hover { border-color: var(--danger); }
   color: var(--muted); font-size: 0.9rem;
 }
 .tpl-takeoff-row .mono { font-family: var(--mono); }
+.tpl-takeoff-row .tpl-takeoff-text { flex: 1; }
+.tpl-takeoff-row .tpl-takeoff-cd { margin-right: 36px; display: inline-flex; }
 
 .row-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
@@ -317,6 +330,16 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .tl-name { color: var(--bright); }
 .tl-off { font-family: var(--mono); font-size: 0.8rem; color: var(--bright); opacity: 0.6; }
+/* Like day flags: offset beside the name on wide screens, under it on
+   phones, which frees the width the countdown needs. */
+@media (max-width: 480px) {
+  .tl-off { display: block; margin-top: 1px; }
+}
+/* Live "time until" under the local time (and its day flag, if shown). */
+.countdown {
+  display: block; margin-top: 2px;
+  font-size: 0.85rem; color: var(--bright); opacity: 0.85;
+}
 
 .actions { display: flex; gap: 12px; margin-top: 16px; }
 .actions button { flex: 1; padding: 14px; font-size: 1.05rem; }

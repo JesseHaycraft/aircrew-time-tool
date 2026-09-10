@@ -5,7 +5,7 @@ import {
   parseOffset, offsetToHMM, resolveJulianYear, makeUtcInstant,
   zonedParts, isValidZone, buildCopyText,
   zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName, zoneWallToUtc,
-  daySegments,
+  daySegments, formatCountdown,
 } from '../js/time-engine.js';
 
 test('leap years', () => {
@@ -193,4 +193,18 @@ test('copy text: Zulu rollover shows the weekday', () => {
     { name: 'Takeoff', offsetMin: 0 },
   ], []);
   assert.equal(text, 'BRIEF: 2130Z (THU 10)\nTAKEOFF: 0130Z (FRI 11)');
+});
+
+test('countdown formatting', () => {
+  const t = Date.UTC(2026, 8, 11, 10, 0);
+  const min = 60_000;
+  assert.equal(formatCountdown(t, t), 'now');
+  assert.equal(formatCountdown(t, t - 20_000), 'now');
+  assert.equal(formatCountdown(t, t - 2 * min), 'in 0:02');
+  // a tick that fires just after the minute boundary still reads whole minutes
+  assert.equal(formatCountdown(t, t - 2 * min + 400), 'in 0:02');
+  assert.equal(formatCountdown(t, t - (2 * 60 + 34) * min), 'in 2:34');
+  assert.equal(formatCountdown(t, t - (29 * 60 + 20) * min), 'in 1d 5:20');
+  assert.equal(formatCountdown(t, t + 7 * min), '0:07 ago');
+  assert.equal(formatCountdown(t, t + (50 * 60) * min), '2d 2:00 ago');
 });
