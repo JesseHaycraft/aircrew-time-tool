@@ -402,18 +402,28 @@ tbody tr:last-child td { border-bottom: none; }
   border-top-color: var(--accent);
 }
 /* faint dashed cursor pinned to the current time; "Currently" sits left of
-   its top, the Zulu time right of it, above the Zulu row's readout */
+   its top, the local time right of it, above the Zulu row's readout. The
+   two labels are equal flex halves around a gap, so the gap's center (and
+   the line) is the container's center; baselines are shared. Parked at a
+   screen edge, both labels turn inward. */
 .slider-now-line {
   position: absolute; top: 0; bottom: 0; width: 0;
   border-left: 1px dashed rgba(245, 184, 61, 0.55);
   z-index: 4; pointer-events: none;
 }
-.slider-now-line .snl-left, .slider-now-line .snl-right {
-  position: absolute; top: 0; line-height: 1;
-  font-size: 0.72rem; color: var(--accent); opacity: 0.85; white-space: nowrap;
+.slider-now-line .snl-top {
+  position: absolute; top: 0; left: -100px; width: 200px;
+  display: flex; align-items: baseline; gap: 12px;
+  font-size: 0.72rem; line-height: 1; color: var(--accent); opacity: 0.85;
 }
-.slider-now-line .snl-left { right: 6px; }
-.slider-now-line .snl-right { left: 6px; font-family: var(--mono); }
+.slider-now-line .snl-left { flex: 1 1 0; min-width: 0; text-align: right; }
+.slider-now-line .snl-right { flex: 1 1 0; min-width: 0; text-align: left; font-family: var(--mono); }
+.slider-now-line.at-left .snl-top,
+.slider-now-line.at-right .snl-top { width: auto; gap: 6px; }
+.slider-now-line.at-left .snl-top { left: 6px; }
+.slider-now-line.at-right .snl-top { left: auto; right: 6px; }
+.slider-now-line.at-left .snl-left, .slider-now-line.at-left .snl-right,
+.slider-now-line.at-right .snl-left, .slider-now-line.at-right .snl-right { flex: none; }
 .sl-row { margin-bottom: 18px; }
 .sl-row:last-child { margin-bottom: 6px; }
 .sl-info { display: flex; align-items: center; }
@@ -457,10 +467,7 @@ tbody tr:last-child td { border-bottom: none; }
 .sl-seg-label {
   position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
   font-size: 0.75rem; color: var(--text); white-space: nowrap;
-  display: inline-flex; gap: 18px; /* cursor line passes through the gap; must match LABEL_GAP */
 }
-.sl-seg-label span:first-child { text-align: right; }
-.sl-seg-label span:last-child { text-align: left; }
 
 .sz-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .sz-item {

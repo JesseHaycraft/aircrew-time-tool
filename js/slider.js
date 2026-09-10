@@ -2,8 +2,8 @@
 // line. The line is the selected instant; bars carry local-day segments
 // whose widths come from real midnight boundaries (23/25 h across DST),
 // tinted by calendar day with the night hours darker.
-import * as T from './time-engine.js?v=0.4.3';
-import { zoneCoords } from './zone-coords.js?v=0.4.3';
+import * as T from './time-engine.js?v=0.4.4';
+import { zoneCoords } from './zone-coords.js?v=0.4.4';
 
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
@@ -12,11 +12,12 @@ const PX_PER_MS = PX_PER_HOUR / HOUR;
 const DRAG_STEP = 5 * MINUTE;        // drag/wheel resolution; ± buttons do 1 min
 const COVER_MS = 24 * HOUR;          // segments are built for t0 ± this
 const REBUILD_MS = 12 * HOUR;        // rebuild when the drag strays this far
-const LABEL_GAP = 18;                // px between weekday and date, cursor passes through
+const LABEL_GAP = 8;                 // px between the cursor line and a day label
+const GREENWICH = [51.48, 0];        // Zulu has no place; shade its nights by Greenwich
 
 export function initSlider({
   stage, rowsEl, nowLine, nowTimeEl, nowBtn, takeoffBtn, minusBtn, plusBtn,
-  getExtraZones, getTakeoffMs,
+  getLocalZone, getExtraZones, getTakeoffMs,
 }) {
   let sliderT = null;    // selected instant (ms epoch)
   let mode = 'now';      // 'now' follows the clock, 'takeoff' sits on it, null = free
@@ -30,8 +31,8 @@ export function initSlider({
 
   function rowDefs() {
     return [
-      { zone: 'UTC', name: 'Zulu' },
-      ...getExtraZones().map((zone) => ({ zone, name: null })),
+      { zone: 'UTC', name: 'Zulu', coords: GREENWICH },
+      ...getExtraZones().map((zone) => ({ zone, name: null, coords: zoneCoords(zone) })),
     ];
   }
 
@@ -63,7 +64,7 @@ export function initSlider({
 
       row.append(info, track);
       rowsEl.append(row);
-      return { ...def, coords: zoneCoords(def.zone), subEl, timeEl, strip, segs: [] };
+      return { ...def, subEl, timeEl, strip, segs: [] };
     });
   }
 
@@ -95,25 +96,14 @@ export function initSlider({
           night.style.width = `${(e - s) * PX_PER_MS}px`;
           el.append(night);
         }
-        // weekday and date as two equal-width halves around a center gap,
-        // so the cursor line passes exactly between them
         const lab = document.createElement('span');
         lab.className = 'sl-seg-label';
-        const wd = document.createElement('span');
-        wd.textContent = seg.weekday;
-        const dm = document.createElement('span');
-        dm.textContent = `${Number(seg.day)} ${seg.month}`;
-        lab.append(wd, dm);
+        lab.textContent = `${seg.weekday} ${Number(seg.day)} ${seg.month}`;
         el.append(lab);
         row.strip.append(el);
-        row.segs.push({ lab, wd, dm, left, width, labW: 0 });
+        row.segs.push({ lab, left, width, labW: 0 });
       }
-      for (const s of row.segs) {
-        const half = Math.ceil(Math.max(s.wd.offsetWidth, s.dm.offsetWidth));
-        s.wd.style.width = `${half}px`;
-        s.dm.style.width = `${half}px`;
-        s.labW = 2 * half + LABEL_GAP;
-      }
+      for (const s of row.segs) s.labW = Math.ceil(s.lab.offsetWidth);
     }
   }
 
@@ -131,25 +121,28 @@ export function initSlider({
         T.utcOffsetLabel(sliderT, row.zone),
       ].filter(Boolean).join(' ');
 
-      // keep each day label inside the visible part of its segment
+      // each day label sits just right of the cursor line; a day that
+      // doesn't reach the cursor keeps its label at its own near edge,
+      // and the next day sliding in pushes the label ahead of it
       for (const s of row.segs) {
         const x = s.left + shift;
-        const visL = Math.max(x, 0);
-        const visR = Math.min(x + s.width, w);
-        if (visR <= visL) { s.lab.style.visibility = 'hidden'; continue; }
+        if (x + s.width <= 0 || x >= w) { s.lab.style.visibility = 'hidden'; continue; }
         s.lab.style.visibility = '';
-        let lx = (visL + visR) / 2 - s.labW / 2 - x;
+        let lx = w / 2 + LABEL_GAP - x;
         lx = Math.max(4, Math.min(lx, s.width - s.labW - 4));
         s.lab.style.left = `${lx}px`;
       }
     }
 
-    // dashed cursor on the current time, wherever the slider has gone
+    // dashed cursor on the current time; when the slider has carried it
+    // off screen it parks at that edge with both labels turned inward
     const now = nowMin();
     const nx = w / 2 + (now - sliderT) * PX_PER_MS;
-    nowLine.hidden = nx < 0 || nx > w;
-    nowLine.style.left = `${nx}px`;
-    nowTimeEl.textContent = T.zonedParts(now, 'UTC').hhmm;
+    nowLine.hidden = false;
+    nowLine.style.left = `${Math.max(0, Math.min(nx, w))}px`;
+    nowLine.classList.toggle('at-left', nx < 0);
+    nowLine.classList.toggle('at-right', nx > w);
+    nowTimeEl.textContent = `${T.zonedParts(now, getLocalZone()).hhmm}L`;
 
     nowBtn.classList.toggle('active', mode === 'now');
     takeoffBtn.classList.toggle('active', mode === 'takeoff');
