@@ -2,17 +2,23 @@
 // line. The line is the selected instant; bars carry local-day segments
 // whose widths come from real midnight boundaries (23/25 h across DST),
 // tinted by calendar day with the night hours darker.
-import * as T from './time-engine.js?v=0.4.5';
-import { zoneCoords } from './zone-coords.js?v=0.4.5';
+import * as T from './time-engine.js?v=0.4.6';
+import { zoneCoords } from './zone-coords.js?v=0.4.6';
 
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
 const PX_PER_HOUR = 32;              // ≈12 hours visible on a phone screen
 const PX_PER_MS = PX_PER_HOUR / HOUR;
-const DRAG_STEP = 5 * MINUTE;        // drag/wheel resolution; ± buttons do 1 min
+const READOUT_STEP = 5 * MINUTE;     // readouts round to this; the slider itself is 1-minute
 const COVER_MS = 24 * HOUR;          // segments are built for t0 ± this
 const REBUILD_MS = 12 * HOUR;        // rebuild when the drag strays this far
-const LABEL_GAP = 8;                 // px between the cursor line and a day label
+const LABEL_GAP_R = 10;              // px from the cursor line to a label on its right
+const LABEL_GAP_L = 20;              // px from a label on the left to the cursor line
+const LABEL_INSET = 16;              // px from a day's end to its label when off the cursor
+const FLING_TAU = 2000;              // ms; velocity decays by e every this long
+const FLING_MIN_PX_S = 50;           // slower releases than this don't fling
+const FLING_STOP_PX_S = 3;           // coasting ends below this speed
+const VELOCITY_WINDOW = 100;         // ms of pointer history used for the fling velocity
 const GREENWICH = [51.48, 0];        // Zulu has no place; shade its nights by Greenwich
 
 export function initSlider({
@@ -28,6 +34,7 @@ export function initSlider({
 
   const snapTo = (ms, step) => Math.round(ms / step) * step;
   const nowMin = () => snapTo(Date.now(), MINUTE);
+  let fling = null;      // { v: slider ms per real ms, last: performance.now(), pos: float ms }
 
   function rowDefs() {
     return [
@@ -114,21 +121,31 @@ export function initSlider({
     for (const row of rows) {
       row.strip.style.transform = `translateX(${shift}px)`;
 
-      row.timeEl.textContent = T.zonedParts(sliderT, row.zone).hhmm;
+      row.timeEl.textContent = T.zonedParts(snapTo(sliderT, READOUT_STEP), row.zone).hhmm;
       const abbr = T.zoneDisplayName(sliderT, row.zone);
       row.subEl.textContent = [
         abbr !== 'UTC' ? abbr : null,
         T.utcOffsetLabel(sliderT, row.zone),
       ].filter(Boolean).join(' ');
 
-      // each day label sits just right of the cursor line; a day that
-      // doesn't reach the cursor keeps its label at its own near edge,
-      // and the next day sliding in pushes the label ahead of it
+      // The day under the cursor keeps its label snug against the line on
+      // whichever side holds more of that day (right before local noon,
+      // left after — it flips at noon). A day that doesn't reach the
+      // cursor keeps its label just inside its end nearest the line.
+      const c = w / 2;
       for (const s of row.segs) {
         const x = s.left + shift;
-        if (x + s.width <= 0 || x >= w) { s.lab.style.visibility = 'hidden'; continue; }
+        const right = x + s.width;
+        if (right <= 0 || x >= w) { s.lab.style.visibility = 'hidden'; continue; }
         s.lab.style.visibility = '';
-        let lx = w / 2 + LABEL_GAP - x;
+        let lx;
+        if (x <= c && c < right) {
+          lx = c < x + s.width / 2 ? c + LABEL_GAP_R - x : c - LABEL_GAP_L - s.labW - x;
+        } else if (right <= c) {
+          lx = s.width - s.labW - LABEL_INSET;
+        } else {
+          lx = LABEL_INSET;
+        }
         lx = Math.max(4, Math.min(lx, s.width - s.labW - 4));
         s.lab.style.left = `${lx}px`;
       }
@@ -155,9 +172,34 @@ export function initSlider({
     }
   }
 
+  // The slider is always at 1-minute precision; only the readouts round.
   function setT(ms, newMode = null) {
-    sliderT = ms;
+    fling = null;
+    sliderT = snapTo(ms, MINUTE);
     mode = newMode;
+    if (Math.abs(sliderT - t0) > REBUILD_MS) buildSegments();
+    schedule();
+  }
+
+  // Momentum after a swipe: keep the release velocity and let it decay
+  // exponentially, the bars coasting to a stop on a whole minute.
+  function startFling(pxPerMs) {
+    fling = { v: -pxPerMs / PX_PER_MS, last: performance.now(), pos: sliderT };
+    requestAnimationFrame(flingStep);
+  }
+  function flingStep(now) {
+    if (!fling) return;
+    const dt = Math.min(now - fling.last, 100);
+    fling.last = now;
+    fling.pos += fling.v * dt;
+    fling.v *= Math.exp(-dt / FLING_TAU);
+    sliderT = snapTo(fling.pos, MINUTE);
+    mode = null;
+    if (Math.abs(fling.v) * PX_PER_MS * 1000 < FLING_STOP_PX_S) {
+      fling = null;
+    } else {
+      requestAnimationFrame(flingStep);
+    }
     if (Math.abs(sliderT - t0) > REBUILD_MS) buildSegments();
     schedule();
   }
@@ -165,22 +207,38 @@ export function initSlider({
   let dragId = null;
   let dragStartX = 0;
   let dragStartT = 0;
+  let trail = [];        // recent pointer samples for the release velocity
   stage.addEventListener('pointerdown', (e) => {
     if (sliderT === null) return;
+    fling = null;
     dragId = e.pointerId;
     dragStartX = e.clientX;
     dragStartT = sliderT;
+    trail = [{ t: performance.now(), x: e.clientX }];
     stage.classList.add('dragging');
     try { stage.setPointerCapture(e.pointerId); } catch { /* synthetic events */ }
   });
   stage.addEventListener('pointermove', (e) => {
     if (dragId !== e.pointerId) return;
-    setT(snapTo(dragStartT - (e.clientX - dragStartX) / PX_PER_MS, DRAG_STEP));
+    const now = performance.now();
+    trail.push({ t: now, x: e.clientX });
+    while (trail.length > 2 && now - trail[0].t > VELOCITY_WINDOW) trail.shift();
+    setT(dragStartT - (e.clientX - dragStartX) / PX_PER_MS);
   });
   const endDrag = (e) => {
     if (dragId !== e.pointerId) return;
     dragId = null;
     stage.classList.remove('dragging');
+    const now = performance.now();
+    const first = trail[0];
+    const last = trail[trail.length - 1];
+    const span = last.t - first.t;
+    // a finger that paused before lifting releases with no velocity
+    if (e.type === 'pointerup' && span >= 10 && now - last.t < 60) {
+      const v = (last.x - first.x) / span;
+      if (Math.abs(v) * 1000 >= FLING_MIN_PX_S) startFling(v);
+    }
+    trail = [];
   };
   stage.addEventListener('pointerup', endDrag);
   stage.addEventListener('pointercancel', endDrag);
@@ -188,13 +246,13 @@ export function initSlider({
     if (sliderT === null) return;
     e.preventDefault();
     const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-    setT(snapTo(sliderT + d / PX_PER_MS / 4, DRAG_STEP));
+    setT(sliderT + d / PX_PER_MS / 4);
   }, { passive: false });
 
   nowBtn.addEventListener('click', () => setT(nowMin(), 'now'));
   takeoffBtn.addEventListener('click', () => {
     const t = getTakeoffMs();
-    if (t !== null) setT(snapTo(t, MINUTE), 'takeoff');
+    if (t !== null) setT(t, 'takeoff');
   });
   minusBtn.addEventListener('click', () => {
     if (sliderT !== null) setT(sliderT - MINUTE);
@@ -213,7 +271,7 @@ export function initSlider({
   // time cursor and, in Now mode, the slider with it.
   let lastTick = null;
   setInterval(() => {
-    if (sliderT === null || !rows.length || document.hidden || stage.offsetParent === null) return;
+    if (sliderT === null || !rows.length || document.hidden || stage.offsetParent === null || fling) return;
     const now = nowMin();
     if (now === lastTick) return;
     lastTick = now;
@@ -225,6 +283,7 @@ export function initSlider({
   // Now; a takeoff computed since the slider was last looked at re-seeds
   // it; otherwise the slider stays where it was left.
   function open() {
+    fling = null;
     const takeoff = getTakeoffMs();
     if (sliderT === null) {
       sliderT = nowMin();
