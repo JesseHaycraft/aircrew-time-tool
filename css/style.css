@@ -121,6 +121,14 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
   cursor: default;
 }
 
+.clock {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  margin: 0 0 12px;
+  color: var(--bright);
+  text-align: center;
+}
+.clock .clock-label { font-family: inherit; color: var(--muted); font-size: 0.9rem; }
 .resolved {
   font-family: var(--mono);
   font-size: 1.05rem;
@@ -283,22 +291,28 @@ button.danger:hover { border-color: var(--danger); }
 .ev-cd:hover { border-color: var(--accent); color: var(--text); }
 .ev-cd[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: #1c2432; }
 
+/* fixed width so the editor header, event rows, and the takeoff row all
+   share one column grid */
 .row-x {
   border: none; background: transparent; color: var(--muted);
   cursor: pointer; font-size: 1rem; line-height: 1;
-  padding: 4px 6px; border-radius: 999px;
+  width: 28px; padding: 4px 0; text-align: center; flex-shrink: 0;
+  border-radius: 999px;
 }
 .row-x:hover { color: var(--danger); }
 
+/* same columns as .ev-row: [text][stopwatch][delete-width spacer] */
 .tpl-takeoff-row {
   display: flex; gap: 8px; align-items: center;
-  margin-top: 8px; padding: 10px 12px;
-  border: 1px dashed var(--border); border-radius: 8px;
-  color: var(--muted); font-size: 0.9rem;
+  margin-top: 8px; color: var(--muted); font-size: 0.9rem;
 }
 .tpl-takeoff-row .mono { font-family: var(--mono); }
-.tpl-takeoff-row .tpl-takeoff-text { flex: 1; }
-.tpl-takeoff-row .tpl-takeoff-cd { margin-right: 36px; display: inline-flex; }
+.tpl-takeoff-row .tpl-takeoff-text {
+  flex: 1; min-width: 0; padding: 8px 12px;
+  border: 1px dashed var(--border); border-radius: 8px;
+}
+.tpl-takeoff-row .tpl-takeoff-cd { display: inline-flex; flex-shrink: 0; }
+.tpl-takeoff-row .h-sp { width: 28px; flex-shrink: 0; }
 
 .row-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 

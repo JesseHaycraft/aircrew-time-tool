@@ -200,11 +200,13 @@ test('countdown formatting', () => {
   const min = 60_000;
   assert.equal(formatCountdown(t, t), 'now');
   assert.equal(formatCountdown(t, t - 20_000), 'now');
-  assert.equal(formatCountdown(t, t - 2 * min), 'in 0:02');
+  assert.equal(formatCountdown(t, t - min), 'in 1min');
+  assert.equal(formatCountdown(t, t - 2 * min), 'in 2mins');
   // a tick that fires just after the minute boundary still reads whole minutes
-  assert.equal(formatCountdown(t, t - 2 * min + 400), 'in 0:02');
-  assert.equal(formatCountdown(t, t - (2 * 60 + 34) * min), 'in 2:34');
-  assert.equal(formatCountdown(t, t - (29 * 60 + 20) * min), 'in 1d 5:20');
-  assert.equal(formatCountdown(t, t + 7 * min), '0:07 ago');
-  assert.equal(formatCountdown(t, t + (50 * 60) * min), '2d 2:00 ago');
+  assert.equal(formatCountdown(t, t - 2 * min + 400), 'in 2mins');
+  assert.equal(formatCountdown(t, t - 60 * min), 'in 1hr');
+  assert.equal(formatCountdown(t, t - (17 * 60 + 18) * min), 'in 17hrs 18mins');
+  assert.equal(formatCountdown(t, t - (29 * 60 + 20) * min), 'in 1day 5hrs 20mins');
+  assert.equal(formatCountdown(t, t + 7 * min), '7mins ago');
+  assert.equal(formatCountdown(t, t + (50 * 60) * min), '2days 2hrs ago');
 });

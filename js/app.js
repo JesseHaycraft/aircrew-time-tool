@@ -1,10 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.4.0';
-import { initSlider } from './slider.js?v=0.4.0';
+import * as T from './time-engine.js?v=0.4.1';
+import { initSlider } from './slider.js?v=0.4.1';
 
-const VERSION = 'v0.4.0';
+const VERSION = 'v0.4.1';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -118,6 +118,7 @@ const modeZuluBtn = $('mode-zulu');
 const modeLocalBtn = $('mode-local');
 const timeInput = $('ztime');
 const resolvedEl = $('resolved');
+const clockEl = $('clock');
 const zoneInput = $('zone-input');
 const suggestEl = $('zone-suggest');
 const timelineTable = $('timeline-table');
@@ -353,6 +354,7 @@ function renderTimeline() {
   copyBtn.disabled = takeoffMs === null;
   if (takeoffMs === null) {
     timelineTable.hidden = true;
+    tickClock();
     return;
   }
   timelineTable.hidden = false;
@@ -417,23 +419,31 @@ function renderTimeline() {
 
     timelineBody.append(tr);
   }
-  tickCountdowns();
+  tickClock();
 }
 
-// Countdowns refresh on the wall-clock minute (plus a small margin so the
-// rounding in formatCountdown lands on the new minute), and immediately
-// when the tab comes back to the foreground — background timers throttle.
-let countdownTimer = null;
-function tickCountdowns() {
-  clearTimeout(countdownTimer);
-  const spans = timelineTable.hidden ? [] : timelineBody.querySelectorAll('.countdown');
-  if (!spans.length) return;
+// The current-time line and the countdowns refresh on the wall-clock
+// minute (plus a small margin so the rounding in formatCountdown lands on
+// the new minute), and immediately when the tab comes back to the
+// foreground — background timers throttle.
+let clockTimer = null;
+function tickClock() {
+  clearTimeout(clockTimer);
   const now = Date.now();
-  for (const span of spans) {
-    span.textContent = T.formatCountdown(Number(span.dataset.target), now);
+  const label = document.createElement('span');
+  label.className = 'clock-label';
+  label.textContent = 'Current time: ';
+  clockEl.replaceChildren(
+    label,
+    `${T.zonedParts(now, 'UTC').hhmm}Z / ${T.zonedParts(now, state.zone).hhmm}L (${T.zoneLabel(state.zone)})`,
+  );
+  if (!timelineTable.hidden) {
+    for (const span of timelineBody.querySelectorAll('.countdown')) {
+      span.textContent = T.formatCountdown(Number(span.dataset.target), now);
+    }
   }
   if (document.hidden) return;
-  countdownTimer = setTimeout(tickCountdowns, 60_000 - (now % 60_000) + 250);
+  clockTimer = setTimeout(tickClock, 60_000 - (now % 60_000) + 250);
 }
 
 function computeAll() {
@@ -471,19 +481,23 @@ function computeAll() {
     takeoffMs = state.timeMode === 'local'
       ? T.zoneWallToUtc(state.zone, ymd.y, ymd.mo, ymd.d, tm.h, tm.m)
       : Date.UTC(ymd.y, ymd.mo - 1, ymd.d, tm.h, tm.m);
-    const p = T.zonedParts(takeoffMs, 'UTC');
-    resolvedText =
-      `Takeoff ${p.hhmm}Z on ${p.weekday} ${p.day} ${p.month} ${p.year} (Day ${T.dayOfYearUtc(takeoffMs)}${dayNote})`;
-    resolvedClass = dayNote ? 'resolved warn' : 'resolved';
+    // The takeoff itself is read off the table; the line above it only
+    // speaks up when the day resolved to next year.
+    if (dayNote) {
+      const p = T.zonedParts(takeoffMs, 'UTC');
+      resolvedText = `Takeoff is next year: ${p.weekday} ${p.day} ${p.month} ${p.year}`;
+      resolvedClass = 'resolved warn';
+    }
   }
 
-  if (resolvedText === null) {
+  if (resolvedText === null && takeoffMs === null) {
     resolvedText = state.dateMode === 'calendar'
       ? 'Pick a date and enter a takeoff time…'
       : 'Enter Julian day and takeoff time…';
     resolvedClass = 'resolved empty';
   }
-  resolvedEl.textContent = resolvedText;
+  resolvedEl.hidden = resolvedText === null;
+  resolvedEl.textContent = resolvedText ?? '';
   resolvedEl.className = resolvedClass;
   if (document.activeElement !== zoneInput) {
     zoneInput.value = zoneDisplayValue();
@@ -1019,7 +1033,7 @@ function init() {
   });
   window.addEventListener('resize', fitZoneInput);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) tickCountdowns();
+    if (!document.hidden) tickClock();
   });
 
   tplName.addEventListener('input', () => {
