@@ -1,10 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.4.4';
-import { initSlider } from './slider.js?v=0.4.4';
+import * as T from './time-engine.js?v=0.4.5';
+import { initSlider } from './slider.js?v=0.4.5';
 
-const VERSION = 'v0.4.4';
+const VERSION = 'v0.4.5';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -901,7 +901,8 @@ const slider = initSlider({
   takeoffBtn: $('slider-takeoff'),
   minusBtn: $('slider-minus'),
   plusBtn: $('slider-plus'),
-  getLocalZone: () => state.zone,
+  // the device's real zone, not the Julian page's pick (which may be elsewhere)
+  getLocalZone: () => deviceZone,
   getExtraZones: () => state.sliderZones,
   getTakeoffMs: () => takeoffMs,
 });

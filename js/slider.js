@@ -2,8 +2,8 @@
 // line. The line is the selected instant; bars carry local-day segments
 // whose widths come from real midnight boundaries (23/25 h across DST),
 // tinted by calendar day with the night hours darker.
-import * as T from './time-engine.js?v=0.4.4';
-import { zoneCoords } from './zone-coords.js?v=0.4.4';
+import * as T from './time-engine.js?v=0.4.5';
+import { zoneCoords } from './zone-coords.js?v=0.4.5';
 
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
