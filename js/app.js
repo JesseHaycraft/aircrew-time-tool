@@ -1,10 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.4.1';
-import { initSlider } from './slider.js?v=0.4.1';
+import * as T from './time-engine.js?v=0.4.2';
+import { initSlider } from './slider.js?v=0.4.2';
 
-const VERSION = 'v0.4.1';
+const VERSION = 'v0.4.2';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -433,9 +433,19 @@ function tickClock() {
   const label = document.createElement('span');
   label.className = 'clock-label';
   label.textContent = 'Current time: ';
+  const zp = T.zonedParts(now, 'UTC');
+  const lp = T.zonedParts(now, state.zone);
+  const part = (text) => {
+    const span = document.createElement('span');
+    span.className = 'clock-part';
+    span.textContent = text;
+    return span;
+  };
   clockEl.replaceChildren(
     label,
-    `${T.zonedParts(now, 'UTC').hhmm}Z / ${T.zonedParts(now, state.zone).hhmm}L (${T.zoneLabel(state.zone)})`,
+    part(`${zp.hhmm}Z (${zp.weekday} ${Number(zp.day)})`),
+    ' ',
+    part(`/ ${lp.hhmm}L (${lp.weekday} ${Number(lp.day)}) ${T.zoneLabel(state.zone)}`),
   );
   if (!timelineTable.hidden) {
     for (const span of timelineBody.querySelectorAll('.countdown')) {

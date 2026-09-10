@@ -129,6 +129,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
   text-align: center;
 }
 .clock .clock-label { font-family: inherit; color: var(--muted); font-size: 0.9rem; }
+.clock .clock-part { white-space: nowrap; }
 .resolved {
   font-family: var(--mono);
   font-size: 1.05rem;
