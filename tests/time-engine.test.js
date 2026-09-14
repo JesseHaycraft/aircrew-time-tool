@@ -271,3 +271,25 @@ test('duration parsing', () => {
   assert.equal(parseDuration(''), null);
   assert.equal(parseDuration('abc'), null);
 });
+
+test('copy text without Zulu: local only, day flags judged on local alone', () => {
+  const takeoff = makeUtcInstant(2026, 254, 5, 30); // FRI 11 SEP 2026 0530Z
+  const events = [{ name: 'Takeoff', offsetMin: 0 }, { name: 'Brief', offsetMin: -60 }];
+  // 0430Z/0530Z are both FRI in Zulu but THU/FRI straddle midnight in Guam? No — Guam is
+  // 1430/1530 FRI. New York: 0030/0130 FRI. Same day everywhere → no flags.
+  assert.equal(buildCopyText(takeoff, events, ['America/New_York'], { zulu: false }), [
+    'BRIEF: 0030 EDT',
+    'TAKEOFF: 0130 EDT',
+  ].join('\n'));
+  // Zulu spans two days but local does not: with Zulu hidden, no flags
+  const t2 = makeUtcInstant(2026, 254, 0, 30); // 0030Z FRI; NY 2030 THU both lines
+  const e2 = [{ name: 'Takeoff', offsetMin: 0 }, { name: 'Brief', offsetMin: -60 }];
+  assert.equal(buildCopyText(t2, e2, ['America/New_York']), [
+    'BRIEF: 2330Z (THU 10) / 1930 EDT (THU 10)',
+    'TAKEOFF: 0030Z (FRI 11) / 2030 EDT (THU 10)',
+  ].join('\n'));
+  assert.equal(buildCopyText(t2, e2, ['America/New_York'], { zulu: false }), [
+    'BRIEF: 1930 EDT',
+    'TAKEOFF: 2030 EDT',
+  ].join('\n'));
+});

@@ -323,7 +323,8 @@ export function zoneDisplayName(ms, zone) {
 
 // Plain-text timeline for pasting into messaging apps. Proportional fonts
 // mangle space-aligned columns, so lines are label-first and short.
-export function buildCopyText(takeoffMs, events, zones) {
+// zulu:false leaves the Zulu column out (local times only).
+export function buildCopyText(takeoffMs, events, zones, { zulu = true } = {}) {
   const sorted = [...events].sort((a, b) => a.offsetMin - b.offsetMin);
   const rows = sorted.map((ev) => {
     const ms = takeoffMs + ev.offsetMin * 60_000;
@@ -339,7 +340,7 @@ export function buildCopyText(takeoffMs, events, zones) {
   // everything shares one day, no flags at all.
   const dateKeys = new Set();
   for (const r of rows) {
-    dateKeys.add(r.zp.dateKey);
+    if (zulu) dateKeys.add(r.zp.dateKey);
     for (const l of r.locals) dateKeys.add(l.p.dateKey);
   }
   const showFlags = dateKeys.size > 1;
@@ -347,7 +348,7 @@ export function buildCopyText(takeoffMs, events, zones) {
 
   return rows.map((r) => {
     const cols = [
-      `${r.zp.hhmm}Z${flag(r.zp)}`,
+      ...(zulu ? [`${r.zp.hhmm}Z${flag(r.zp)}`] : []),
       ...r.locals.map((l) => `${l.p.hhmm} ${l.name}${flag(l.p)}`),
     ];
     return `${r.ev.name.toUpperCase()}: ${cols.join(' / ')}`;

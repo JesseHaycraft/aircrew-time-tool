@@ -1,10 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.4.8';
-import { initSlider } from './slider.js?v=0.4.8';
+import * as T from './time-engine.js?v=0.4.9';
+import { initSlider } from './slider.js?v=0.4.9';
 
-const VERSION = 'v0.4.8';
+const VERSION = 'v0.4.9';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -87,6 +87,7 @@ function loadState() {
     sliderZonesInitialized: true,
     dateMode: s.dateMode === 'calendar' ? 'calendar' : 'julian',
     timeMode: s.timeMode === 'local' ? 'local' : 'zulu',
+    copyZulu: s.copyZulu !== false,
     landingOpen: s.landingOpen === true,
     landingMode: s.landingMode === 'duration' ? 'duration' : 'zulu',
     landingZulu: typeof s.landingZulu === 'string' ? s.landingZulu : '',
@@ -155,6 +156,8 @@ const timelineTable = $('timeline-table');
 const timelineHead = $('timeline-head');
 const timelineBody = $('timeline-body');
 const copyBtn = $('copy-btn');
+const copyZuluSwitch = $('copy-zulu');
+const copyZuluState = $('copy-zulu-state');
 const deviceBtn = $('zone-device-btn');
 const tplSelectBtn = $('tpl-select-btn');
 const tplSelectLabel = $('tpl-select-label');
@@ -621,7 +624,12 @@ function zoneDisplayValue() {
 }
 
 function currentCopyText() {
-  return T.buildCopyText(takeoffMs, timelineEvents(), [state.zone]);
+  return T.buildCopyText(takeoffMs, timelineEvents(), [state.zone], { zulu: state.copyZulu });
+}
+
+function renderCopyOptions() {
+  copyZuluSwitch.setAttribute('aria-checked', String(state.copyZulu));
+  copyZuluState.textContent = state.copyZulu ? 'Yes' : 'No';
 }
 
 function flash(btn, msg) {
@@ -1185,6 +1193,13 @@ function init() {
     draft.events.push({ name: '', offset: '-1:00', countdown: false });
     renderTemplateEditor();
   });
+
+  copyZuluSwitch.addEventListener('click', () => {
+    state.copyZulu = !state.copyZulu;
+    saveState();
+    renderCopyOptions();
+  });
+  renderCopyOptions();
 
   copyBtn.addEventListener('click', async () => {
     if (takeoffMs === null) return;
