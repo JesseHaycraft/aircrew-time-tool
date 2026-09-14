@@ -1,10 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.4.10';
-import { initSlider } from './slider.js?v=0.4.10';
+import * as T from './time-engine.js?v=0.5.0';
+import { initSlider } from './slider.js?v=0.5.0';
 
-const VERSION = 'v0.4.10';
+const VERSION = 'v0.5.0';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 

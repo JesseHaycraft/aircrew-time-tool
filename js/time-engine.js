@@ -321,36 +321,26 @@ export function zoneDisplayName(ms, zone) {
   return abbr.startsWith('GMT') || abbr.startsWith('UTC') ? zoneLabel(zone) : abbr;
 }
 
-// Plain-text timeline for pasting into messaging apps. Proportional fonts
-// mangle space-aligned columns, so lines are label-first and short.
-// zulu:false leaves the Zulu column out (local times only).
+// Plain-text timeline for pasting into messaging apps. Times come first
+// on every line (five characters each, so columns hold in any font with
+// equal-width digits), each with its weekday; names trail. One short
+// header names the local zone. zulu:false leaves the Zulu column out.
 export function buildCopyText(takeoffMs, events, zones, { zulu = true } = {}) {
   const sorted = [...events].sort((a, b) => a.offsetMin - b.offsetMin);
-  const rows = sorted.map((ev) => {
+  const header = 'Local: ' + zones.map((zone) => {
+    const label = zoneLabel(zone);
+    const abbr = zoneDisplayName(takeoffMs, zone);
+    return `${label} (${abbr === label ? utcOffsetLabel(takeoffMs, zone) : abbr})`;
+  }).join(' · ');
+  const stamp = (p, suffix) => `${p.hhmm}${suffix} (${p.weekday})`;
+  const lines = sorted.map((ev) => {
     const ms = takeoffMs + ev.offsetMin * 60_000;
-    return {
-      ev,
-      zp: zonedParts(ms, 'UTC'),
-      locals: zones.map((zone) => ({ p: zonedParts(ms, zone), name: zoneDisplayName(ms, zone) })),
-    };
-  });
-
-  // All-or-nothing day flags: as soon as more than one calendar day
-  // appears anywhere in the output, every time states its day; when
-  // everything shares one day, no flags at all.
-  const dateKeys = new Set();
-  for (const r of rows) {
-    if (zulu) dateKeys.add(r.zp.dateKey);
-    for (const l of r.locals) dateKeys.add(l.p.dateKey);
-  }
-  const showFlags = dateKeys.size > 1;
-  const flag = (p) => (showFlags ? ` (${p.weekday} ${Number(p.day)})` : '');
-
-  return rows.map((r) => {
     const cols = [
-      ...(zulu ? [`${r.zp.hhmm}Z${flag(r.zp)}`] : []),
-      ...r.locals.map((l) => `${l.p.hhmm} ${l.name}${flag(l.p)}`),
+      ...(zulu ? [stamp(zonedParts(ms, 'UTC'), 'Z')] : []),
+      ...zones.map((zone) => stamp(zonedParts(ms, zone), 'L')),
     ];
-    return `${r.ev.name.toUpperCase()}: ${cols.join(' / ')}`;
-  }).join('\n');
+    const name = ev.name === 'Takeoff' || ev.name === 'Landing' ? ev.name.toUpperCase() : ev.name;
+    return `${cols.join('  ')}  ${name}`;
+  });
+  return (zones.length ? [header, ...lines] : lines).join('\n');
 }
