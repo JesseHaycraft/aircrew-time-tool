@@ -1,10 +1,10 @@
 // The ?v= query on this import and on the <script>/<link> tags in
 // index.html must move together each release — it pins the browser
 // cache so a new HTML page can never run against stale JS.
-import * as T from './time-engine.js?v=0.4.9';
-import { initSlider } from './slider.js?v=0.4.9';
+import * as T from './time-engine.js?v=0.4.10';
+import { initSlider } from './slider.js?v=0.4.10';
 
-const VERSION = 'v0.4.9';
+const VERSION = 'v0.4.10';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -87,7 +87,7 @@ function loadState() {
     sliderZonesInitialized: true,
     dateMode: s.dateMode === 'calendar' ? 'calendar' : 'julian',
     timeMode: s.timeMode === 'local' ? 'local' : 'zulu',
-    copyZulu: s.copyZulu !== false,
+    showZulu: s.showZulu !== undefined ? s.showZulu !== false : s.copyZulu !== false,
     landingOpen: s.landingOpen === true,
     landingMode: s.landingMode === 'duration' ? 'duration' : 'zulu',
     landingZulu: typeof s.landingZulu === 'string' ? s.landingZulu : '',
@@ -394,8 +394,10 @@ function renderTimeline() {
   }
   timelineTable.hidden = false;
 
+  const showZ = state.showZulu;
   const headRow = document.createElement('tr');
-  headRow.append(th('Event'), th('Zulu'));
+  headRow.append(th('Event'));
+  if (showZ) headRow.append(th('Zulu'));
   const localCell = th(`Local (${T.zoneLabel(state.zone)})`);
   localCell.title = state.zone;
   headRow.append(localCell);
@@ -410,7 +412,7 @@ function renderTimeline() {
   });
   const dateKeys = new Set();
   for (const r of rows) {
-    dateKeys.add(r.zp.dateKey);
+    if (showZ) dateKeys.add(r.zp.dateKey);
     dateKeys.add(r.lp.dateKey);
   }
   const showFlags = dateKeys.size > 1;
@@ -438,7 +440,7 @@ function renderTimeline() {
     zTd.className = 'time-cell';
     zTd.append(`${zp.hhmm}Z`);
     if (showFlags) zTd.append(' ', dayFlag(zp));
-    tr.append(zTd);
+    if (showZ) tr.append(zTd);
 
     const localTd = document.createElement('td');
     localTd.className = 'time-cell';
@@ -624,12 +626,12 @@ function zoneDisplayValue() {
 }
 
 function currentCopyText() {
-  return T.buildCopyText(takeoffMs, timelineEvents(), [state.zone], { zulu: state.copyZulu });
+  return T.buildCopyText(takeoffMs, timelineEvents(), [state.zone], { zulu: state.showZulu });
 }
 
 function renderCopyOptions() {
-  copyZuluSwitch.setAttribute('aria-checked', String(state.copyZulu));
-  copyZuluState.textContent = state.copyZulu ? 'Yes' : 'No';
+  copyZuluSwitch.setAttribute('aria-checked', String(state.showZulu));
+  copyZuluState.textContent = state.showZulu ? 'Yes' : 'No';
 }
 
 function flash(btn, msg) {
@@ -1195,9 +1197,10 @@ function init() {
   });
 
   copyZuluSwitch.addEventListener('click', () => {
-    state.copyZulu = !state.copyZulu;
+    state.showZulu = !state.showZulu;
     saveState();
     renderCopyOptions();
+    renderTimeline();
   });
   renderCopyOptions();
 
