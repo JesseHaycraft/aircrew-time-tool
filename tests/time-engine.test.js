@@ -144,7 +144,8 @@ test('zone names and UTC offsets', () => {
   assert.equal(zoneLabel('America/New_York'), 'New York');
   assert.equal(zoneLabel('Pacific/Guam'), 'Guam');
   assert.equal(zoneDisplayName(june, 'America/New_York'), 'EDT');
-  assert.equal(zoneDisplayName(june, 'Pacific/Guam'), 'Guam'); // short name is only GMT+10
+  assert.equal(zoneDisplayName(june, 'Pacific/Guam'), 'ChST');
+  assert.equal(zoneDisplayName(june, 'Asia/Dubai'), 'Dubai'); // the tz database has no abbreviation, only "+04"
   assert.equal(utcOffsetLabel(june, 'America/New_York'), 'UTC-4');
   assert.equal(utcOffsetLabel(Date.UTC(2026, 0, 15), 'America/New_York'), 'UTC-5');
   assert.equal(utcOffsetLabel(june, 'Asia/Kolkata'), 'UTC+5:30');
@@ -260,13 +261,16 @@ test('copy text: zones without a real abbreviation show their UTC offset', () =>
     { name: 'Takeoff', offsetMin: 0 },
     { name: 'Stop drink', offsetMin: -720 },
     { name: 'Landing', offsetMin: 500 },
-  ], ['Pacific/Guam']);
+  ], ['Asia/Dubai']);
   assert.equal(text, [
-    'Local: Guam (UTC+10)',
-    '0802Z (WED)  1802L (WED)  Stop drink',
-    '2002Z (WED)  0602L (THU)  TAKEOFF',
-    '0422Z (THU)  1422L (THU)  LANDING',
+    'Local: Dubai (UTC+4)',
+    '0802Z (WED)  1202L (WED)  Stop drink',
+    '2002Z (WED)  0002L (THU)  TAKEOFF',
+    '0422Z (THU)  0822L (THU)  LANDING',
   ].join('\n'));
+  // Guam has one
+  assert.equal(buildCopyText(takeoff, [{ name: 'Takeoff', offsetMin: 0 }], ['Pacific/Guam']),
+    'Local: Guam (ChST)\n2002Z (WED)  0602L (THU)  TAKEOFF');
 });
 
 test('copy text without Zulu: local column only', () => {

@@ -304,19 +304,19 @@ export function zonedParts(ms, zone) {
   };
 }
 
-// Short zone name ("EDT") for an instant. The tz database has no English
-// names for most of the world, so this comes from the device — but only
-// when the device's clock for that instant agrees with ours. When it
-// doesn't (its rules are out of date), the plain offset ("GMT-6") stands
-// in, so a name is never shown beside a time it doesn't match.
+// Short zone name for an instant: the tz database's own abbreviation
+// ("EDT", "CEST", "ChST"), so it always matches the offset beside it and
+// reads the same on every device. '' where the database has none and
+// only gives a numeric placeholder ("+04"). Outside the bundled data the
+// device's short name is used, under the same rule.
 export function zoneAbbr(ms, zone) {
-  let device = null;
-  try { device = deviceZonedParts(ms, zone); } catch { /* zone unknown to this device */ }
   const rule = ruleAt(ms, zone);
-  if (!rule) return device ? device.zoneAbbr : '';
-  const ours = zonedParts(ms, zone);
-  if (device && device.hhmm === ours.hhmm && device.dateKey === ours.dateKey) return device.zoneAbbr;
-  return offsetLabel('GMT', rule[0]);
+  let abbr = '';
+  if (rule) abbr = rule[1];
+  else {
+    try { abbr = deviceZonedParts(ms, zone).zoneAbbr; } catch { /* zone unknown to this device */ }
+  }
+  return /^[+-]\d|^(GMT|UTC)[+-]/.test(abbr) ? '' : abbr;
 }
 
 function wallParts(ms, zone) {
@@ -475,11 +475,10 @@ export function longZoneName(ms, zone) {
   return timeZonePart(ms, zone, 'long');
 }
 
-// Short abbreviation when CLDR has one (EDT, CDT); city name when it
-// would only be a GMT offset (Pacific/Guam → "Guam").
+// Short abbreviation when the zone has one (EDT, CEST); city name when
+// it doesn't (Asia/Dubai → "Dubai").
 export function zoneDisplayName(ms, zone) {
-  const abbr = zoneAbbr(ms, zone);
-  return !abbr || abbr.startsWith('GMT') || abbr.startsWith('UTC') ? zoneLabel(zone) : abbr;
+  return zoneAbbr(ms, zone) || zoneLabel(zone);
 }
 
 // Plain-text timeline for pasting into messaging apps. Times come first

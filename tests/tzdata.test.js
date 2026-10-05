@@ -95,25 +95,30 @@ test('outside the data file the device\'s rules are used, and flagged', () => {
   assert.equal(zoneAbbr(later, 'America/New_York'), 'EDT');
 });
 
-test('a zone name is never shown beside a time it does not match', (t) => {
-  // Only observable on a runtime whose own rules are out of date for a
-  // zone the data file knows better — true of tz releases before 2026e.
+test('short zone names are the tz database\'s own, whatever the device calls them', () => {
+  const jan = Date.UTC(2027, 0, 15, 20, 0);
+  const jul = Date.UTC(2027, 6, 15, 20, 0);
+  const names = (zone) => [zoneAbbr(jan, zone), zoneAbbr(jul, zone)];
+  assert.deepEqual(names('America/New_York'), ['EST', 'EDT']);
+  assert.deepEqual(names('Europe/London'), ['GMT', 'BST']);
+  assert.deepEqual(names('Europe/Paris'), ['CET', 'CEST']);
+  assert.deepEqual(names('Asia/Tokyo'), ['JST', 'JST']);
+  assert.deepEqual(names('Pacific/Guam'), ['ChST', 'ChST']);
+  assert.deepEqual(names('Australia/Sydney'), ['AEDT', 'AEST']);
+  assert.deepEqual(names('UTC'), ['UTC', 'UTC']);
+  // the zones that went to permanent time in 2026 carry the database's labels
+  assert.deepEqual(names('America/Vancouver'), ['MST', 'MST']);
+  assert.deepEqual(names('America/Edmonton'), ['CST', 'CST']);
+  assert.deepEqual(names('America/Winnipeg'), ['EST', 'EST']);
+  // no abbreviation in the database, only a numeric placeholder: the city stands in
+  assert.deepEqual(names('Asia/Dubai'), ['', '']);
+  assert.deepEqual(names('Asia/Kabul'), ['', '']);
+  assert.equal(zoneDisplayName(jan, 'Asia/Dubai'), 'Dubai');
+  assert.equal(zoneDisplayName(jan, 'Europe/London'), 'GMT');
+
   const dec = Date.UTC(2026, 11, 15, 20, 0);
-  const device = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Winnipeg', hourCycle: 'h23', hour: '2-digit', minute: '2-digit',
-  }).format(dec);
-  if (device === '15:00') {
-    t.skip('this runtime already has Manitoba\'s 2026 change');
-    return;
-  }
-  assert.equal(device, '14:00');                           // the runtime still says CST
-  assert.equal(zonedParts(dec, 'America/Winnipeg').hhmm, '1500');
-  assert.equal(zoneAbbr(dec, 'America/Winnipeg'), 'GMT-5'); // not "CST"
-  assert.equal(zoneDisplayName(dec, 'America/Winnipeg'), 'Winnipeg');
   const text = buildCopyText(dec, [{ name: 'Takeoff', offsetMin: 0 }], ['America/Winnipeg']);
-  assert.equal(text, 'Local: Winnipeg (UTC-5)\n2000Z (TUE)  1500L (TUE)  TAKEOFF');
-  // where the runtime agrees, its name is used as before
-  assert.equal(zoneAbbr(dec, 'America/New_York'), 'EST');
+  assert.equal(text, 'Local: Winnipeg (EST)\n2000Z (TUE)  1500L (TUE)  TAKEOFF');
 });
 
 test('a damaged data file is refused and the good one stays in place', () => {

@@ -209,8 +209,7 @@ function buildZoneEntry(id) {
   const names = new Set();
   for (const t of [Date.UTC(year, 0, 15), Date.UTC(year, 6, 15)]) {
     names.add(T.longZoneName(t, id));
-    const abbr = T.zoneAbbr(t, id);
-    if (!abbr.startsWith('GMT')) names.add(abbr);
+    names.add(T.zoneAbbr(t, id));   // '' when the zone has none; dropped below
   }
   const display = [...names].filter(Boolean);
   const offset = T.utcOffsetLabel(Date.now(), id);
