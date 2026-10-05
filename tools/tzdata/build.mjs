@@ -2,7 +2,7 @@
 //
 //   node tools/tzdata/build.mjs [version]      version: e.g. 2026e (default: latest)
 //
-// Stage 1 (build-dump.sh) needs a POSIX system with cc, make and curl.
+// Stage 1 (build-dump.sh) needs a POSIX system with cc, make, curl and gpg.
 // On Linux it runs directly; elsewhere it runs in a Docker container.
 // Stage 2 (convert.mjs) turns its text output into the JSON file.
 import { spawnSync } from 'node:child_process';
@@ -33,7 +33,7 @@ if (process.platform === 'linux') {
 } else {
   run('docker', [
     'run', '--rm', '-v', `${here}:/tz`, 'alpine:3', 'sh', '-c',
-    `apk add --no-cache build-base curl >/dev/null && sh /tz/build-dump.sh ${stageArgs.join(' ')} /tz/.work`,
+    `apk add --no-cache build-base curl gnupg >/dev/null && sh /tz/build-dump.sh ${stageArgs.join(' ')} /tz/.work`,
   ]);
 }
 
