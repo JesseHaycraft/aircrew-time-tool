@@ -109,8 +109,9 @@ function loadState() {
     timeMode: s.timeMode === 'local' ? 'local' : 'zulu',
     showZulu: s.showZulu !== undefined ? s.showZulu !== false : s.copyZulu !== false,
     landingOpen: s.landingOpen === true,
-    landingMode: s.landingMode === 'duration' ? 'duration' : 'zulu',
+    landingMode: ['local', 'duration'].includes(s.landingMode) ? s.landingMode : 'zulu',
     landingZulu: typeof s.landingZulu === 'string' ? s.landingZulu : '',
+    landingLocal: typeof s.landingLocal === 'string' ? s.landingLocal : '',
     landingDuration: typeof s.landingDuration === 'string' ? s.landingDuration : '',
     calDate: typeof s.calDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.calDate)
       ? s.calDate
@@ -163,8 +164,10 @@ const modeLocalBtn = $('mode-local');
 const landingToggle = $('landing-toggle');
 const landingBody = $('landing-body');
 const modeLZuluBtn = $('mode-lzulu');
+const modeLLocalBtn = $('mode-llocal');
 const modeLDurBtn = $('mode-ldur');
 const landingInput = $('landing-input');
+const landingInputLabel = $('landing-input-label');
 const landingCalc = $('landing-calc');
 const landingCalcLabel = $('landing-calc-label');
 const timeInput = $('ztime');
@@ -635,36 +638,39 @@ function computeAll() {
   renderTimeline();
 }
 
-// Landing card: a Zulu landing time (on the takeoff day, or the next if
-// it's not after the takeoff) or a flight duration; each shows the other.
+// Landing card: a landing time, Zulu or local (the next time that clock
+// shows it after the takeoff), or a flight duration; a time shows the
+// duration it works out to, and a duration shows the Zulu landing time.
+const LANDING_ENTRY = { zulu: 'landingZulu', local: 'landingLocal', duration: 'landingDuration' };
 function computeLanding() {
   landingMs = null;
   let label = '';
   let calc = '';
   let flag = '';
   let muted = false;
-  const zuluMode = state.landingMode === 'zulu';
-  const raw = zuluMode ? state.landingZulu : state.landingDuration;
-  const parsed = zuluMode ? T.parseTimeHHMM(raw) : T.parseDuration(raw);
+  const mode = state.landingMode;
+  const raw = state[LANDING_ENTRY[mode]];
+  const parsed = mode === 'duration' ? T.parseDuration(raw) : T.parseTimeHHMM(raw);
   landingInput.classList.toggle('invalid', raw.trim() !== '' && parsed === null);
   if (parsed !== null && takeoffMs === null) {
     calc = 'Needs a takeoff time';
     muted = true;
   } else if (parsed !== null) {
-    if (zuluMode) {
-      const d = new Date(takeoffMs);
-      let cand = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), parsed.h, parsed.m);
-      if (cand <= takeoffMs) cand += 86_400_000;
-      landingMs = cand;
-      label = 'Duration';
-      calc = T.offsetToHMM((landingMs - takeoffMs) / 60_000).replace('+', '');
-    } else {
+    // the day is flagged on the clock the entry was made in
+    const zone = mode === 'local' ? state.zone : 'UTC';
+    if (mode === 'duration') {
       landingMs = takeoffMs + parsed * 60_000;
       label = 'Lands';
       calc = `${T.zonedParts(landingMs, 'UTC').hhmm}Z`;
+    } else {
+      landingMs = T.nextWallTime(takeoffMs, zone, parsed.h, parsed.m);
+      label = 'Duration';
+      // HH:MM, the way a typed duration is shown
+      const mins = Math.round((landingMs - takeoffMs) / 60_000);
+      calc = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
     }
-    const lp = T.zonedParts(landingMs, 'UTC');
-    if (lp.dateKey !== T.zonedParts(takeoffMs, 'UTC').dateKey) {
+    const lp = T.zonedParts(landingMs, zone);
+    if (lp.dateKey !== T.zonedParts(takeoffMs, zone).dateKey) {
       flag = `(${lp.weekday} ${Number(lp.day)})`;
     }
   }
@@ -678,9 +684,12 @@ function computeLanding() {
   }
   landingCalc.classList.toggle('muted', muted);
   if (document.activeElement !== landingInput) landingInput.value = raw;
-  landingInput.placeholder = zuluMode ? '1205' : '8:35';
-  modeLZuluBtn.classList.toggle('active', zuluMode);
-  modeLDurBtn.classList.toggle('active', !zuluMode);
+  landingInput.placeholder = mode === 'duration' ? '08:35' : '1205';
+  landingInputLabel.textContent = mode === 'duration' ? 'Flight duration'
+    : mode === 'local' ? 'Landing time, local' : 'Landing time, Zulu';
+  modeLZuluBtn.classList.toggle('active', mode === 'zulu');
+  modeLLocalBtn.classList.toggle('active', mode === 'local');
+  modeLDurBtn.classList.toggle('active', mode === 'duration');
   landingToggle.setAttribute('aria-expanded', String(state.landingOpen));
   landingBody.hidden = !state.landingOpen;
 }
@@ -1224,18 +1233,24 @@ function init() {
   const setLandingMode = (mode) => {
     state.landingMode = mode;
     // each mode keeps its own entry; show it even if the box has focus
-    landingInput.value = mode === 'zulu' ? state.landingZulu : state.landingDuration;
+    landingInput.value = state[LANDING_ENTRY[mode]];
     saveState();
     computeAll();
   };
   modeLZuluBtn.addEventListener('click', () => setLandingMode('zulu'));
+  modeLLocalBtn.addEventListener('click', () => setLandingMode('local'));
   modeLDurBtn.addEventListener('click', () => setLandingMode('duration'));
-  landingInput.addEventListener('input', () => {
-    if (state.landingMode === 'zulu') state.landingZulu = landingInput.value;
-    else state.landingDuration = landingInput.value;
+  // a duration gets its colon as it is typed, and is padded to HH:MM on leaving the box
+  const setLandingEntry = (done) => {
+    if (state.landingMode === 'duration') {
+      landingInput.value = T.formatDurationEntry(landingInput.value, done);
+    }
+    state[LANDING_ENTRY[state.landingMode]] = landingInput.value;
     saveState();
     computeAll();
-  });
+  };
+  landingInput.addEventListener('input', () => setLandingEntry(false));
+  landingInput.addEventListener('blur', () => setLandingEntry(true));
   tplLandingInclude.addEventListener('change', () => {
     draft.includeLanding = tplLandingInclude.checked;
   });

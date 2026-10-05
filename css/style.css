@@ -142,6 +142,8 @@ input.invalid { border-color: var(--danger); }
 input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
 
 .mode-toggle { gap: 6px; min-height: 30px; }
+/* the landing card's three choices sit in a row of their own, above both columns */
+.landing-mode { display: flex; align-items: center; margin-bottom: 6px; }
 .mode-toggle button {
   border: 1px solid var(--border);
   background: #0f141c;

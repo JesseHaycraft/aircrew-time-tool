@@ -62,6 +62,16 @@ export function parseDuration(input) {
   return total > 0 ? total : null;
 }
 
+// A duration entry tidied as it is typed: digits only, with a colon
+// before the last two once there are three ("835" → "8:35"). With
+// `done`, the finished entry is padded out to HH:MM ("835" → "08:35",
+// "45" → "00:45"), matching how parseDuration reads the bare digits.
+export function formatDurationEntry(input, done = false) {
+  let digits = String(input).replace(/\D/g, '').slice(0, 4);
+  if (done && digits) digits = digits.padStart(4, '0');
+  return digits.length > 2 ? `${digits.slice(0, -2)}:${digits.slice(-2)}` : digits;
+}
+
 // Signed minutes → "-2:30" / "+0:45" / "0:00".
 export function offsetToHMM(minutes) {
   const sign = minutes < 0 ? '-' : minutes > 0 ? '+' : '';
@@ -343,6 +353,21 @@ export function zoneWallToUtc(zone, year, month1, day, hour, minute) {
     guess += want - shown;
   }
   return guess;
+}
+
+// The first instant after `afterMs` at which the zone's clock reads
+// hour:minute — a landing time given without a date is the next time the
+// clock shows it after takeoff.
+export function nextWallTime(afterMs, zone, hour, minute) {
+  const d = new Date(afterMs);
+  let best = null;
+  // the zone's date can be a day either side of the UTC date
+  for (let add = -1; add <= 2; add++) {
+    const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + add));
+    const ms = zoneWallToUtc(zone, day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate(), hour, minute);
+    if (ms > afterMs && (best === null || ms < best)) best = ms;
+  }
+  return best;
 }
 
 // Local-day segments (midnight to midnight in the zone's wall clock, so

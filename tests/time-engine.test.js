@@ -6,6 +6,7 @@ import {
   zonedParts, isValidZone, buildCopyText,
   zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName, zoneWallToUtc,
   daySegments, formatCountdown, sunEvents, nightIntervals, parseDuration,
+  formatDurationEntry, nextWallTime,
   setZoneData,
 } from '../js/time-engine.js';
 import { readFileSync } from 'node:fs';
@@ -271,4 +272,37 @@ test('copy text without Zulu: local column only', () => {
     '1930L (THU)  Brief',
     '2030L (THU)  TAKEOFF',
   ].join('\n'));
+});
+
+test('duration entry is tidied to HH:MM as it is typed', () => {
+  assert.equal(formatDurationEntry('8'), '8');
+  assert.equal(formatDurationEntry('83'), '83');
+  assert.equal(formatDurationEntry('835'), '8:35');
+  assert.equal(formatDurationEntry('0835'), '08:35');
+  assert.equal(formatDurationEntry('08:3'), '0:83');   // after a backspace
+  assert.equal(formatDurationEntry('12:345'), '12:34');
+  assert.equal(formatDurationEntry('8h35'), '8:35');
+  assert.equal(formatDurationEntry(''), '');
+  // finished entries are padded, and read the same as the bare digits
+  assert.equal(formatDurationEntry('835', true), '08:35');
+  assert.equal(formatDurationEntry('45', true), '00:45');
+  assert.equal(formatDurationEntry('8', true), '00:08');
+  assert.equal(formatDurationEntry('', true), '');
+  for (const typed of ['835', '45', '8', '1200']) {
+    assert.equal(parseDuration(formatDurationEntry(typed, true)), parseDuration(typed));
+  }
+});
+
+test('nextWallTime: the next time a zone clock shows a time', () => {
+  const takeoff = Date.UTC(2026, 9, 7, 18, 0);   // 7 OCT 1800Z = 8 OCT 0400 Guam
+  // Zulu: later the same day, or the next day when not after the takeoff
+  assert.equal(nextWallTime(takeoff, 'UTC', 23, 30), Date.UTC(2026, 9, 7, 23, 30));
+  assert.equal(nextWallTime(takeoff, 'UTC', 2, 35), Date.UTC(2026, 9, 8, 2, 35));
+  assert.equal(nextWallTime(takeoff, 'UTC', 18, 0), Date.UTC(2026, 9, 8, 18, 0));
+  // Guam (UTC+10): 1235 local on the 8th is 0235Z on the 8th
+  assert.equal(nextWallTime(takeoff, 'Pacific/Guam', 12, 35), Date.UTC(2026, 9, 8, 2, 35));
+  // 0330 local has already passed on the 8th, so it is the 9th: 1730Z on the 8th
+  assert.equal(nextWallTime(takeoff, 'Pacific/Guam', 3, 30), Date.UTC(2026, 9, 8, 17, 30));
+  // Honolulu (UTC-10): local date is behind the Zulu date
+  assert.equal(nextWallTime(takeoff, 'Pacific/Honolulu', 9, 0), Date.UTC(2026, 9, 7, 19, 0));
 });
