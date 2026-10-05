@@ -140,12 +140,13 @@ function timelineEvents() {
       countdown: e.countdown === true,
     }))
     .filter((e) => e.offsetMin !== null);
-  events.push({ name: 'Takeoff', offsetMin: 0, countdown: tpl?.takeoffCountdown === true });
+  events.push({ name: 'Takeoff', offsetMin: 0, countdown: tpl?.takeoffCountdown === true, fixed: true });
   if (landingMs !== null && takeoffMs !== null && tpl?.includeLanding !== false) {
     events.push({
       name: 'Landing',
       offsetMin: Math.round((landingMs - takeoffMs) / 60_000),
       countdown: tpl?.landingCountdown === true,
+      fixed: true,
     });
   }
   return events.sort((a, b) => a.offsetMin - b.offsetMin);
@@ -170,12 +171,10 @@ const zoneStamp = $('zone-stamp');
 const zoneDetail = $('zone-detail');
 const zoneCheckBtn = $('zone-check-btn');
 const zoneCheckResult = $('zone-check-result');
-const clockEl = $('clock');
 const zoneInput = $('zone-input');
 const suggestEl = $('zone-suggest');
-const timelineTable = $('timeline-table');
-const timelineHead = $('timeline-head');
-const timelineBody = $('timeline-body');
+const soeTakeoff = $('soe-takeoff');
+const timelineEl = $('timeline');
 const copyBtn = $('copy-btn');
 const copyZuluSwitch = $('copy-zulu');
 const copyZuluState = $('copy-zulu-state');
@@ -367,12 +366,6 @@ function createZonePicker({ input, menu, isActive, onPick, onEnterFallback }) {
 
 // ---- rendering ----------------------------------------------------------
 
-function th(text) {
-  const el = document.createElement('th');
-  el.textContent = text;
-  return el;
-}
-
 function renderTemplateSelect() {
   const tpl = activeTemplate();
   tplSelectLabel.textContent = state.templates.length
@@ -459,117 +452,98 @@ function renderZoneStamp() {
     + 'The app checks for a newer release whenever it is opened online.';
 }
 
+// A small element with a class and, usually, some text.
+function el(cls, text = '') {
+  const node = document.createElement('div');
+  node.className = cls;
+  node.textContent = text;
+  return node;
+}
+
+// Top of the SOEs page: the takeoff in Zulu and in local time.
+function renderSoeTakeoff() {
+  soeTakeoff.hidden = takeoffMs === null;
+  soeTakeoff.replaceChildren();
+  if (takeoffMs === null) return;
+  const lines = [['UTC', 'Zulu'], [state.zone, `Local (${T.zoneLabel(state.zone)})`]];
+  lines.forEach(([zone, label], i) => {
+    const p = T.zonedParts(takeoffMs, zone);
+    soeTakeoff.append(
+      el('st-label', i === 0 ? 'Takeoff:' : ''),
+      el('st-date', `${Number(p.day)} ${p.month}`),
+      el('st-at', 'at'),
+      el('st-time', p.hhmm),
+      el('st-zone', label),
+    );
+  });
+}
+
+// Where an event's time comes from: "Takeoff − 3:15", "Takeoff + 0:45".
+function offsetText(ev) {
+  const abs = Math.abs(ev.offsetMin);
+  const sign = ev.offsetMin < 0 ? '\u2212' : '+';
+  return `Takeoff ${sign} ${Math.floor(abs / 60)}:${String(abs % 60).padStart(2, '0')}`;
+}
+
 function renderTimeline() {
   copyBtn.disabled = takeoffMs === null;
   soeEmpty.hidden = takeoffMs !== null;
+  timelineEl.hidden = takeoffMs === null;
+  timelineEl.replaceChildren();
+  renderSoeTakeoff();
   if (takeoffMs === null) {
-    timelineTable.hidden = true;
     renderZoneNote([]);
-    tickClock();
+    tickCountdowns();
     return;
   }
-  timelineTable.hidden = false;
 
-  const showZ = state.showZulu;
-  const headRow = document.createElement('tr');
-  headRow.append(th('Event'));
-  if (showZ) headRow.append(th('Zulu'));
-  const localCell = th(`Local (${T.zoneLabel(state.zone)})`);
-  localCell.title = state.zone;
-  headRow.append(localCell);
-  timelineHead.replaceChildren(headRow);
-
-  // All-or-nothing day flags: if more than one calendar day appears in
-  // the sequence (either column), every time states its day; when
-  // everything shares one day, no flags at all.
   const rows = timelineEvents().map((ev) => {
     const ms = takeoffMs + ev.offsetMin * 60_000;
     return { ev, ms, zp: T.zonedParts(ms, 'UTC'), lp: T.zonedParts(ms, state.zone) };
   });
   renderZoneNote(rows.map((r) => r.ms));
-  const dateKeys = new Set();
-  for (const r of rows) {
-    if (showZ) dateKeys.add(r.zp.dateKey);
-    dateKeys.add(r.lp.dateKey);
-  }
-  const showFlags = dateKeys.size > 1;
-  const dayFlag = (parts) => {
-    const span = document.createElement('span');
-    span.className = 'day-flag';
-    span.textContent = `(${parts.weekday} ${Number(parts.day)})`;
-    return span;
-  };
+  // All-or-nothing day labels: if more than one calendar day appears in
+  // the sequence (in either column), every time states its day; when
+  // everything shares one day, none do.
+  const showDays = new Set(rows.flatMap((r) => [r.zp.dateKey, r.lp.dateKey])).size > 1;
+  const dayText = (p) => `${p.weekday} ${Number(p.day)}`;
 
-  timelineBody.replaceChildren();
-  for (const { ev, zp, lp } of rows) {
-    const tr = document.createElement('tr');
-
-    const nameTd = document.createElement('td');
-    nameTd.className = 'tl-name';
-    nameTd.append(`${ev.name} `);
-    const offSpan = document.createElement('span');
-    offSpan.className = 'tl-off';
-    offSpan.textContent = `(${ev.offsetMin === 0 ? '-0:00' : T.offsetToHMM(ev.offsetMin)})`;
-    nameTd.append(offSpan);
-    tr.append(nameTd);
-
-    const zTd = document.createElement('td');
-    zTd.className = 'time-cell';
-    zTd.append(`${zp.hhmm}Z`);
-    if (showFlags) zTd.append(' ', dayFlag(zp));
-    if (showZ) tr.append(zTd);
-
-    const localTd = document.createElement('td');
-    localTd.className = 'time-cell';
-    localTd.append(`${lp.hhmm}L`);
-    if (showFlags) localTd.append(' ', dayFlag(lp));
+  for (const { ev, ms, zp, lp } of rows) {
+    const left = el('soe-left');
+    left.append(el('soe-name', ev.name));
+    // takeoff and landing come from the Frag page, not from an offset
+    if (!ev.fixed) left.append(el('soe-off', offsetText(ev)));
+    const times = el('soe-times');
+    times.append(el('soe-time', `${lp.hhmm}L`), el('soe-sep', '/'), el('soe-time', `${zp.hhmm}Z`));
+    if (showDays) times.append(el('soe-day', dayText(lp)), el('soe-sep'), el('soe-day', dayText(zp)));
+    const main = el('soe-main');
+    main.append(left, times);
+    const row = el('soe-row');
+    row.append(main);
     if (ev.countdown) {
-      const cd = document.createElement('span');
-      cd.className = 'countdown';
-      cd.dataset.target = String(takeoffMs + ev.offsetMin * 60_000);
-      localTd.append(cd);
+      const cd = el('soe-countdown');
+      cd.dataset.target = String(ms);
+      row.append(cd);
     }
-    tr.append(localTd);
-
-    timelineBody.append(tr);
+    timelineEl.append(row);
   }
-  tickClock();
+  tickCountdowns();
 }
 
-// The current-time line and the countdowns refresh on the wall-clock
-// minute (plus a small margin so the rounding in formatCountdown lands on
-// the new minute), and immediately when the tab comes back to the
-// foreground — background timers throttle.
-let clockTimer = null;
-function tickClock() {
-  clearTimeout(clockTimer);
+// The countdowns refresh on the wall-clock minute (plus a small margin so
+// the rounding in formatCountdown lands on the new minute), and
+// immediately when the tab comes back to the foreground — background
+// timers throttle.
+let countdownTimer = null;
+function tickCountdowns() {
+  clearTimeout(countdownTimer);
+  const spans = timelineEl.querySelectorAll('.soe-countdown');
   const now = Date.now();
-  const label = document.createElement('span');
-  label.className = 'clock-label';
-  label.textContent = 'Current time: ';
-  const zp = T.zonedParts(now, 'UTC');
-  const lp = T.zonedParts(now, state.zone);
-  const part = (text) => {
-    const span = document.createElement('span');
-    span.className = 'clock-part';
-    span.textContent = text;
-    return span;
-  };
-  const grid = document.createElement('span');
-  grid.className = 'clock-grid';
-  grid.append(
-    label,
-    part(`${zp.hhmm}Z (${zp.weekday} ${Number(zp.day)})`),
-    part(`${lp.hhmm}L (${lp.weekday} ${Number(lp.day)}) ${T.zoneLabel(state.zone)}`),
-  );
-  clockEl.replaceChildren(grid);
-  if (!timelineTable.hidden) {
-    for (const span of timelineBody.querySelectorAll('.countdown')) {
-      span.textContent = T.formatCountdown(Number(span.dataset.target), now);
-    }
+  for (const span of spans) {
+    span.textContent = T.formatCountdown(Number(span.dataset.target), now);
   }
-  if (document.hidden) return;
-  clockTimer = setTimeout(tickClock, 60_000 - (now % 60_000) + 250);
+  if (document.hidden || !spans.length) return;
+  countdownTimer = setTimeout(tickCountdowns, 60_000 - (now % 60_000) + 250);
 }
 
 function computeAll() {
@@ -642,7 +616,7 @@ function computeLanding() {
     const zones = ['UTC', state.zone];
     const [lz, ll] = zones.map((zone) => T.zonedParts(landingMs, zone));
     const [tz, tl] = zones.map((zone) => T.zonedParts(takeoffMs, zone));
-    // as in the event table, the day goes on both times or on neither
+    // as on the SOEs page, the day goes on both times or on neither
     const flagged = lz.dateKey !== tz.dateKey || ll.dateKey !== tl.dateKey;
     const day = (p) => (flagged ? ` (${p.weekday} ${Number(p.day)})` : '');
     text = `Lands ${lz.hhmm}Z${day(lz)} / ${ll.hhmm}L${day(ll)}`;
@@ -1250,7 +1224,7 @@ function init() {
   window.addEventListener('resize', fitZoneInput);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
-    tickClock();
+    tickCountdowns();
     renderZoneStamp();
     // a page left open for days asks again when it's looked at
     if (Date.now() - (zoneCheckedMs ?? 0) > ZONE_RECHECK_AFTER) checkZoneData().then(afterZoneCheck);

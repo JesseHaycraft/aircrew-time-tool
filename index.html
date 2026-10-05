@@ -74,29 +74,23 @@
 
   <div id="soes-page" hidden>
   <section class="card results">
-    <h2>Sequence of Events</h2>
+    <p id="soe-empty" class="resolved empty">Enter a takeoff time on the Frag page&hellip;</p>
+    <div id="soe-takeoff" class="soe-takeoff" hidden></div>
     <div class="tpl-row">
-      <span class="tpl-label">Template</span>
+      <span class="tpl-label">SOE template:</span>
       <div class="tpl-select-wrap">
         <button id="tpl-select-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
           <span id="tpl-select-label"></span>
         </button>
         <div id="tpl-select-menu" class="tpl-select-menu" hidden></div>
       </div>
-      <button id="tpl-manage-btn" type="button" class="ghost">Manage&hellip;</button>
+      <button id="tpl-manage-btn" type="button" class="ghost">Edit</button>
     </div>
-    <p id="clock" class="clock"></p>
-    <p id="soe-empty" class="resolved empty">Enter a takeoff time on the Frag page&hellip;</p>
     <p id="zone-note" class="resolved warn" hidden></p>
-    <div class="table-wrap">
-      <table id="timeline-table" hidden>
-        <thead id="timeline-head"></thead>
-        <tbody id="timeline-body"></tbody>
-      </table>
-    </div>
+    <div id="timeline" class="soe-list" hidden></div>
     <div class="copy-opts">
-      <span class="copy-opt-label">Show Zulu:</span>
-      <button id="copy-zulu" type="button" class="switch" role="switch" aria-checked="true" aria-label="Show Zulu times in the sequence and copied text">
+      <span class="copy-opt-label">Zulu in copied text:</span>
+      <button id="copy-zulu" type="button" class="switch" role="switch" aria-checked="true" aria-label="Include Zulu times in the copied text">
         <span class="switch-knob" aria-hidden="true"></span>
       </button>
       <span id="copy-zulu-state" class="copy-opt-state">Yes</span>

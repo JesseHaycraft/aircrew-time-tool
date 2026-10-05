@@ -131,21 +131,18 @@ input.invalid { border-color: var(--danger); }
 .input-group > input[type="date"] { font-size: 1.15rem; letter-spacing: 0.02em; }
 input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
 
-/* Current time: Zulu and local stacked, times lined up under each other;
-   the block as a whole is centered. */
-.clock {
-  display: flex; justify-content: center;
-  font-family: var(--mono);
-  font-size: 1.05rem;
-  margin: 0 0 12px;
-  color: var(--bright);
+/* SOEs page: the takeoff in Zulu and local, one line each, the dates and
+   times under each other */
+.soe-takeoff {
+  display: grid; grid-template-columns: auto auto auto auto minmax(0, 1fr);
+  column-gap: 0.7ch; row-gap: 2px; align-items: baseline;
+  margin: 0 0 14px;
+  font-family: var(--mono); font-size: 1.05rem; color: var(--bright);
 }
-.clock-grid {
-  display: grid; grid-template-columns: auto auto; column-gap: 0.6ch;
-  text-align: left; max-width: 100%;
-}
-.clock .clock-label { grid-column: 1; color: var(--muted); font-size: 0.9rem; align-self: baseline; }
-.clock .clock-part { grid-column: 2; white-space: nowrap; }
+.soe-takeoff .st-label { color: var(--muted); font-size: 0.9rem; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.soe-takeoff .st-date { text-align: right; white-space: nowrap; }
+.soe-takeoff .st-at { color: var(--muted); }
+.soe-takeoff .st-zone { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 0.95rem; }
 .resolved {
   font-family: var(--mono);
   font-size: 1.05rem;
@@ -154,7 +151,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 }
 .resolved.warn { color: var(--warn); }
 .resolved.empty { color: var(--muted); font-family: inherit; font-size: 0.95rem; }
-/* under the takeoff inputs rather than above the table */
+/* under the entry boxes on the Frag page */
 .inputs-row + .resolved { margin: 12px 0 0; font-size: 0.9rem; }
 
 .zone-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -193,7 +190,7 @@ button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ---- template selector (app-themed dropdown, not the native select) ---- */
-.tpl-row { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
+.tpl-row { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
 .tpl-label { font-size: 0.85rem; color: var(--muted); }
 .tpl-select-wrap { position: relative; flex: 1; min-width: 0; }
 #tpl-select-btn {
@@ -337,44 +334,25 @@ button.danger:hover { border-color: var(--danger); }
 
 .row-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
-/* ---- timeline (results) ---- */
-.table-wrap { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; }
-th, td {
-  text-align: left; padding: 9px 10px;
-  border-bottom: 1px solid var(--border);
+/* ---- sequence of events: one row per event, the name over where its
+   time comes from on the left, local / Zulu on the right ---- */
+.soe-row { padding: 10px 2px; border-bottom: 1px solid var(--border); }
+.soe-row:last-child { border-bottom: none; }
+.soe-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.soe-left { min-width: 0; }
+.soe-name { color: var(--bright); font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
+.soe-off { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); margin-top: 1px; }
+/* three columns so each day sits under its own time */
+.soe-times {
+  display: grid; grid-template-columns: auto auto auto; column-gap: 0.8ch;
+  flex-shrink: 0; justify-items: center;
+  font-family: var(--mono); color: var(--bright); white-space: nowrap;
 }
-th { white-space: nowrap; }
-th {
-  font-size: 0.75rem; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--muted);
-}
-tbody tr:last-child td { border-bottom: none; }
-/* Day flags sit uniformly: beside the time on wide screens, on their own
-   line below it on phones — never a mix decided by per-cell wrapping. */
-.time-cell { font-family: var(--mono); color: var(--bright); white-space: nowrap; }
-.day-flag {
-  font-size: 0.8rem;
-  color: var(--bright);
-  opacity: 0.75;
-  white-space: nowrap;
-  display: inline-block;
-}
-@media (max-width: 480px) {
-  .day-flag { display: block; margin-top: 1px; }
-}
-.tl-name { color: var(--bright); }
-.tl-off { font-family: var(--mono); font-size: 0.8rem; color: var(--bright); opacity: 0.6; }
-/* Like day flags: offset beside the name on wide screens, under it on
-   phones, which frees the width the countdown needs. */
-@media (max-width: 480px) {
-  .tl-off { display: block; margin-top: 1px; }
-}
-/* Live "time until" under the local time (and its day flag, if shown). */
-.countdown {
-  display: block; margin-top: 2px;
-  font-size: 0.85rem; color: var(--bright); opacity: 0.85;
-}
+.soe-time { font-size: 1.15rem; }
+.soe-sep { color: var(--muted); font-size: 1.15rem; }
+.soe-day { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
+/* live "time until", on a line of its own under the event it belongs to */
+.soe-countdown { margin: 4px 0 0 12px; font-size: 0.85rem; color: var(--accent); }
 
 /* copy options: a sliding switch, amber when on */
 .copy-opts { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
@@ -526,10 +504,8 @@ tbody tr:last-child td { border-bottom: none; }
 .about-links { display: flex; gap: 20px; flex-wrap: wrap; }
 .about-links a { color: var(--accent); }
 
-/* tighter side margins on phones so the events table rarely needs to
-   scroll sideways */
+/* tighter side margins on phones, where width is short */
 @media (max-width: 480px) {
   main { padding-left: 6px; padding-right: 6px; }
   .card { padding-left: 10px; padding-right: 10px; }
-  th, td { padding-left: 6px; padding-right: 6px; }
 }
