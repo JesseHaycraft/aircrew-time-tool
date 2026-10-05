@@ -1,0 +1,162 @@
+name: Zone data update
+
+# Once a day: if IANA has published a new tz release, rebuild
+# data/tzdata.json from it, test it, and open a pull request whose
+# description says what changed. Merging the pull request publishes the
+# new data; closing it rejects that release. A pull request left open for
+# seven days is merged automatically, provided the tests still pass.
+#
+# Repository setting this relies on: Settings > Actions > General >
+# "Allow GitHub Actions to create and approve pull requests".
+
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: IANA release to build, e.g. 2026e (default latest)
+        required: false
+        default: latest
+      rebuild_site:
+        description: Also ask GitHub Pages to rebuild the site
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  pages: write
+
+concurrency:
+  group: zone-data
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  # Pinned on purpose: this Node's built-in zone rules are the independent
+  # reference the data file is checked against, and
+  # tests/reference-differences.json is keyed to its tz release. After
+  # changing it, rebuild that list with `review.mjs --rebase --write`.
+  NODE_VERSION: '24.19.0'
+  WAIT_DAYS: '7'
+
+jobs:
+  merge-waiting:
+    name: Merge a proposal that has waited long enough
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # GitHub pauses scheduled workflows in a public repository after 60
+      # days without a commit; re-enabling resets that clock.
+      - name: Keep this schedule from being paused
+        run: gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/zone-data.yml/enable"
+
+      - name: Merge proposals older than the waiting period
+        run: |
+          git config user.name "$(git log -1 --format=%an origin/main)"
+          git config user.email "$(git log -1 --format=%ae origin/main)"
+          cutoff=$(date -u -d "$WAIT_DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
+          gh pr list --state open --base main --json number,createdAt,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"zone-data/\")) | select(.createdAt < \"$cutoff\") | \"\(.number) \(.headRefName)\"" |
+          while read -r number branch; do
+            echo "Proposal #$number ($branch) has waited $WAIT_DAYS days; testing it on top of main."
+            git checkout -q -B candidate origin/main
+            git merge -q --no-edit "origin/$branch"
+            npm test
+            git push origin candidate:main
+            git push origin --delete "$branch"
+            # a push made by a workflow doesn't start a site build by itself
+            gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" --silent
+            echo "Merged #$number and requested a site build." >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Rebuild the site on request
+        if: inputs.rebuild_site
+        run: gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" --silent
+
+  propose:
+    name: Propose an update when IANA has a new release
+    needs: merge-waiting
+    runs-on: ubuntu-latest
+    steps:
+      # The scheduled run works on main as it is now (the job above may
+      # just have merged into it); a manual run works on the branch it
+      # was started from.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'main' || github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Compare releases
+        id: releases
+        run: |
+          want="${{ inputs.version || 'latest' }}"
+          if [ "$want" = latest ]; then
+            want=$(curl -fsSL https://data.iana.org/time-zones/tzdb/version)
+          fi
+          have=$(jq -r .version data/tzdata.json)
+          echo "want=$want" >> "$GITHUB_OUTPUT"
+          echo "have=$have" >> "$GITHUB_OUTPUT"
+          if [ "$want" = "$have" ]; then
+            echo "Already on tz $have; nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "build=no" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --heads origin "zone-data/$want" > /dev/null; then
+            echo "A proposal for tz $want already exists; nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "build=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the data file
+        if: steps.releases.outputs.build == 'yes'
+        run: |
+          cp data/tzdata.json "$RUNNER_TEMP/previous.json"
+          node tools/tzdata/build.mjs "${{ steps.releases.outputs.want }}"
+
+      - name: Review the change
+        if: steps.releases.outputs.build == 'yes'
+        run: |
+          status=0
+          node tools/tzdata/review.mjs --previous "$RUNNER_TEMP/previous.json" --write \
+            > "$RUNNER_TEMP/summary.md" || status=$?
+          cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Test
+        if: steps.releases.outputs.build == 'yes'
+        run: npm test
+
+      - name: Open the pull request
+        if: steps.releases.outputs.build == 'yes'
+        run: |
+          have="${{ steps.releases.outputs.have }}"
+          want="${{ steps.releases.outputs.want }}"
+          base=$(git rev-parse --abbrev-ref HEAD)
+          branch="zone-data/$want"
+          git config user.name "$(git log -1 --format=%an)"
+          git config user.email "$(git log -1 --format=%ae)"
+          git checkout -q -b "$branch"
+          git add data/tzdata.json tests/reference-differences.json
+          git commit -q -m "Zone data: tz $have to $want"
+          git push -q origin "$branch"
+          {
+            echo
+            echo "---"
+            echo "Built from the signed IANA release and tested by the Zone data update workflow."
+            echo "**Merge** to publish this data to every user. **Close** to reject this release."
+            echo "If nothing is done, it is merged automatically $WAIT_DAYS days after it was opened, provided the tests still pass."
+          } >> "$RUNNER_TEMP/summary.md"
+          gh pr create --base "$base" --head "$branch" \
+            --title "Time zone data: tz $have to $want" \
+            --body-file "$RUNNER_TEMP/summary.md" \
+            --assignee "$GITHUB_REPOSITORY_OWNER"

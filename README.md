@@ -44,6 +44,8 @@ Time zone rules come from `data/tzdata.json`, which is built from the IANA tz da
 npm run build:tzdata
 ```
 
+This normally happens by itself. A scheduled workflow (`.github/workflows/zone-data.yml`) checks IANA once a day; when a new release is out it verifies the release's signature, rebuilds the file, tests it, and opens a pull request describing which zones change. Merging the pull request publishes the data, and the app picks it up the next time it is opened online. A pull request left alone is merged automatically after seven days if the tests still pass.
+
 All time math lives in `js/time-engine.js` (pure functions, no DOM). Run its tests with:
 
 ```sh
