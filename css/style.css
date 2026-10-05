@@ -131,18 +131,6 @@ input.invalid { border-color: var(--danger); }
 .input-group > input[type="date"] { font-size: 1.15rem; letter-spacing: 0.02em; }
 input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
 
-/* SOEs page: the takeoff in Zulu and local, one line each, the dates and
-   times under each other */
-.soe-takeoff {
-  display: grid; grid-template-columns: auto auto auto auto minmax(0, 1fr);
-  column-gap: 0.7ch; row-gap: 2px; align-items: baseline;
-  margin: 0 0 14px;
-  font-family: var(--mono); font-size: 1.05rem; color: var(--bright);
-}
-.soe-takeoff .st-label { color: var(--muted); font-size: 0.9rem; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-.soe-takeoff .st-date { text-align: right; white-space: nowrap; }
-.soe-takeoff .st-at { color: var(--muted); }
-.soe-takeoff .st-zone { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 0.95rem; }
 .resolved {
   font-family: var(--mono);
   font-size: 1.05rem;

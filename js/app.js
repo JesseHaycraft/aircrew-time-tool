@@ -209,7 +209,6 @@ const zoneCheckBtn = $('zone-check-btn');
 const zoneCheckResult = $('zone-check-result');
 const zoneInput = $('zone-input');
 const suggestEl = $('zone-suggest');
-const soeTakeoff = $('soe-takeoff');
 const timelineEl = $('timeline');
 const copyBtn = $('copy-btn');
 const copyZuluSwitch = $('copy-zulu');
@@ -496,30 +495,11 @@ function el(cls, text = '') {
   return node;
 }
 
-// Top of the SOEs page: the takeoff in Zulu and in local time.
-function renderSoeTakeoff() {
-  soeTakeoff.hidden = takeoffMs === null;
-  soeTakeoff.replaceChildren();
-  if (takeoffMs === null) return;
-  const lines = [['UTC', 'Zulu'], [state.zone, `Local (${T.zoneLabel(state.zone)})`]];
-  lines.forEach(([zone, label], i) => {
-    const p = T.zonedParts(takeoffMs, zone);
-    soeTakeoff.append(
-      el('st-label', i === 0 ? 'Takeoff:' : ''),
-      el('st-date', `${Number(p.day)} ${p.month}`),
-      el('st-at', 'at'),
-      el('st-time', p.hhmm),
-      el('st-zone', label),
-    );
-  });
-}
-
 function renderTimeline() {
   copyBtn.disabled = takeoffMs === null;
   soeEmpty.hidden = takeoffMs !== null;
   timelineEl.hidden = takeoffMs === null;
   timelineEl.replaceChildren();
-  renderSoeTakeoff();
   if (takeoffMs === null) {
     renderZoneNote([]);
     tickCountdowns();
