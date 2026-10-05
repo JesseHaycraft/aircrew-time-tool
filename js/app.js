@@ -44,11 +44,11 @@ try {
 
 const todayUtcStr = () => new Date().toISOString().slice(0, 10);
 
-// The pages, in page-bar order, with the name each shows in the header.
-const PAGES = { frag: 'Frag', soes: 'SOEs', convert: 'Convert', about: 'About' };
+// The pages, in page-bar order.
+const PAGES = ['frag', 'soes', 'convert', 'about'];
 // Page names saved or bookmarked by versions before the three-page layout.
 const OLD_PAGES = { julian: 'frag', slider: 'convert' };
-const pageFromName = (name) => (Object.hasOwn(PAGES, name) ? name : OLD_PAGES[name] ?? null);
+const pageFromName = (name) => (PAGES.includes(name) ? name : OLD_PAGES[name] ?? null);
 
 let state = loadState();
 let takeoffMs = null;
@@ -169,7 +169,6 @@ const landingCalcLabel = $('landing-calc-label');
 const timeInput = $('ztime');
 const dateLabel = $('date-label');
 const resolvedEl = $('resolved');
-const takeoffSummary = $('takeoff-summary');
 const soeEmpty = $('soe-empty');
 const zoneNote = $('zone-note');
 const zoneStamp = $('zone-stamp');
@@ -578,35 +577,11 @@ function tickClock() {
   clockTimer = setTimeout(tickClock, 60_000 - (now % 60_000) + 250);
 }
 
-// The takeoff read back under its inputs, in Zulu and in the local zone,
-// so a mistyped day or the wrong zone shows before leaving the page.
-function renderTakeoffSummary() {
-  takeoffSummary.hidden = takeoffMs === null;
-  takeoffSummary.replaceChildren();
-  if (takeoffMs === null) return;
-  const cell = (cls, text) => {
-    const span = document.createElement('span');
-    span.className = cls;
-    span.textContent = text;
-    return span;
-  };
-  for (const [zone, label] of [['UTC', 'Zulu'], [state.zone, `Local (${T.zoneLabel(state.zone)})`]]) {
-    const p = T.zonedParts(takeoffMs, zone);
-    takeoffSummary.append(
-      cell('ts-date', `${Number(p.day)} ${p.month}`),
-      cell('ts-at', 'at'),
-      cell('ts-time', p.hhmm),
-      cell('ts-zone', label),
-    );
-  }
-}
-
 function computeAll() {
   const tm = T.parseTimeHHMM(state.time);
   timeInput.classList.toggle('invalid', state.time.trim() !== '' && tm === null);
   takeoffMs = null;
-  let resolvedText = null;
-  let resolvedClass = 'resolved';
+  let resolvedText = null;   // only ever a warning about the takeoff day
   let dayNote = '';
 
   // Resolve the entered date to calendar components: the Zulu date in Zulu
@@ -623,7 +598,6 @@ function computeAll() {
       const year = T.resolveJulianYear(doy, Date.now());
       if (year === null) {
         resolvedText = `Day ${doy} doesn't exist in the coming years.`;
-        resolvedClass = 'resolved warn';
       } else {
         const dd = new Date(Date.UTC(year, 0, doy));
         ymd = { y: year, mo: dd.getUTCMonth() + 1, d: dd.getUTCDate() };
@@ -636,27 +610,18 @@ function computeAll() {
     takeoffMs = state.timeMode === 'local'
       ? T.zoneWallToUtc(state.zone, ymd.y, ymd.mo, ymd.d, tm.h, tm.m)
       : Date.UTC(ymd.y, ymd.mo - 1, ymd.d, tm.h, tm.m);
-    // The takeoff itself is read back below; this line only speaks up
-    // when the day resolved to next year.
+    // The takeoff itself is read off the SOEs page; this line only
+    // speaks up when the day resolved to next year.
     if (dayNote) {
       const p = T.zonedParts(takeoffMs, 'UTC');
       resolvedText = `Takeoff is next year: ${p.weekday} ${p.day} ${p.month} ${p.year}`;
-      resolvedClass = 'resolved warn';
     }
   }
 
   computeLanding();
 
-  if (resolvedText === null && takeoffMs === null) {
-    resolvedText = state.dateMode === 'calendar'
-      ? 'Pick a date and enter a takeoff time…'
-      : 'Enter Julian day and takeoff time…';
-    resolvedClass = 'resolved empty';
-  }
   resolvedEl.hidden = resolvedText === null;
   resolvedEl.textContent = resolvedText ?? '';
-  resolvedEl.className = resolvedClass;
-  renderTakeoffSummary();
   if (document.activeElement !== zoneInput) {
     zoneInput.value = zoneDisplayValue();
     zoneInput.scrollLeft = 0;
@@ -1097,10 +1062,9 @@ function closeManager() {
   computeAll();
 }
 
-const pageTitle = $('page-title');
 const pageEls = {};
 const pageBtns = {};
-for (const name of Object.keys(PAGES)) {
+for (const name of PAGES) {
   pageEls[name] = $(`${name}-page`);
   pageBtns[name] = $(`page-${name}`);
 }
@@ -1188,8 +1152,7 @@ function applyPage(page) {
     state.page = page;
     saveState();
   }
-  pageTitle.textContent = PAGES[page];
-  for (const name of Object.keys(PAGES)) {
+  for (const name of PAGES) {
     pageEls[name].hidden = name !== page;
     pageBtns[name].classList.toggle('active', name === page);
     if (name === page) pageBtns[name].setAttribute('aria-current', 'page');
@@ -1359,7 +1322,7 @@ function init() {
 
   // page navigation, synced to the URL hash so the phone's back button
   // flips pages instead of leaving the app
-  for (const name of Object.keys(PAGES)) {
+  for (const name of PAGES) {
     pageBtns[name].addEventListener('click', () => { location.hash = name; });
   }
   window.addEventListener('hashchange', () => {

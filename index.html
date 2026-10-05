@@ -10,9 +10,14 @@
 <link rel="stylesheet" href="css/style.css?v=0.6.1">
 </head>
 <body>
-<header>
-  <h1 id="page-title">Frag</h1>
-</header>
+<nav class="page-bar" aria-label="Pages">
+  <div class="page-bar-inner">
+    <button id="page-frag" type="button">Frag</button>
+    <button id="page-soes" type="button">SOEs</button>
+    <button id="page-convert" type="button">Convert</button>
+    <button id="page-about" type="button">About</button>
+  </div>
+</nav>
 <main>
   <div id="frag-page">
   <div class="date-mode" role="group" aria-label="Enter dates as">
@@ -36,8 +41,18 @@
         <input id="ztime" inputmode="numeric" placeholder="0530" maxlength="5" autocomplete="off">
       </div>
     </div>
-    <p id="resolved" class="resolved empty">Enter Julian day and takeoff time&hellip;</p>
-    <div id="takeoff-summary" class="takeoff-summary" hidden></div>
+    <p id="resolved" class="resolved warn" hidden></p>
+  </section>
+
+  <section class="card">
+    <h2>Local time zone</h2>
+    <div class="zone-row">
+      <div class="zone-input-wrap">
+        <input id="zone-input" autocomplete="off" spellcheck="false" placeholder="Search city, zone name, or abbreviation">
+        <div id="zone-suggest" class="zone-suggest" hidden></div>
+      </div>
+      <button id="zone-device-btn" type="button" class="ghost">Set device zone</button>
+    </div>
   </section>
 
   <section class="card">
@@ -63,17 +78,6 @@
     </div>
   </section>
 
-  <section class="card">
-    <h2>Local time zone</h2>
-    <div class="zone-row">
-      <div class="zone-input-wrap">
-        <input id="zone-input" autocomplete="off" spellcheck="false" placeholder="Search city, zone name, or abbreviation">
-        <div id="zone-suggest" class="zone-suggest" hidden></div>
-      </div>
-      <button id="zone-device-btn" type="button" class="ghost">Set device zone</button>
-    </div>
-    <p class="hint">Zulu times convert to/from this zone (defaults to your device&rsquo;s zone).</p>
-  </section>
   </div>
 
   <div id="soes-page" hidden>
@@ -163,15 +167,6 @@
     </section>
   </div>
 </main>
-
-<nav class="page-bar" aria-label="Pages">
-  <div class="page-bar-inner">
-    <button id="page-frag" type="button">Frag</button>
-    <button id="page-soes" type="button">SOEs</button>
-    <button id="page-convert" type="button">Convert</button>
-    <button id="page-about" type="button">About</button>
-  </div>
-</nav>
 
 <div id="sz-overlay" class="overlay" hidden>
   <div class="overlay-panel">
