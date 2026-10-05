@@ -29,6 +29,19 @@ function makeDefaultTemplate() {
   };
 }
 
+// Zone data kept on the device: the last good copy of data/tzdata.json and
+// when the site last answered an update check (see "zone data" below).
+const ZONE_DATA_KEY = 'att-zonedata-v1';
+const ZONE_CHECK_KEY = 'att-zonedata-checked';
+const DAY_MS = 86_400_000;
+const ZONE_STALE_DAYS = 30;                  // warn after this long without a check
+const ZONE_RECHECK_AFTER = 12 * 3_600_000;   // an open page checks again after this
+let zoneCheckedMs = null;
+try {
+  const saved = Number(localStorage.getItem(ZONE_CHECK_KEY));
+  if (Number.isFinite(saved) && saved > 0) zoneCheckedMs = saved;
+} catch { /* storage unavailable */ }
+
 const todayUtcStr = () => new Date().toISOString().slice(0, 10);
 
 let state = loadState();
@@ -391,25 +404,53 @@ function showTplMenu() {
 // one of the instants isn't in it.
 function renderZoneNote(instants) {
   let text = '';
+  const staleDays = zoneDataStaleDays();
   if (T.zoneDataInfo() === null) {
     text = 'Time zone data hasn’t loaded — using this device’s own rules, which may be out of date.';
   } else if (instants.some((ms) => T.usesDeviceData(ms, state.zone) || T.usesDeviceData(ms, 'UTC'))) {
     text = 'Not covered by the app’s time zone data — using this device’s own rules for these times.';
+  } else if (staleDays !== null) {
+    text = `Time zone data hasn’t been checked for updates in ${staleDays} days — `
+      + 'go online and reopen the app to check.';
   }
   zoneNote.hidden = text === '';
   zoneNote.textContent = text;
 }
 
+// Whole days since the site last answered an update check; null if never.
+function zoneDataCheckedDays() {
+  return zoneCheckedMs === null ? null : Math.max(0, Math.floor((Date.now() - zoneCheckedMs) / DAY_MS));
+}
+
+// That count once it has gone past the limit, else null.
+function zoneDataStaleDays() {
+  const days = zoneDataCheckedDays();
+  return days !== null && days >= ZONE_STALE_DAYS ? days : null;
+}
+
 // Footer stamp: which release of the time zone rules the app is running
-// on, the way a chart carries its edition.
+// on and when it last checked for a newer one, the way a chart carries
+// its edition and currency.
 function renderZoneStamp() {
   const info = T.zoneDataInfo();
-  zoneStamp.textContent = info ? `Zone data ${info.version}` : 'Zone data not loaded';
-  zoneStamp.title = info
-    ? `Time zone rules from IANA release ${info.version}, built ${info.built}. `
-      + `Covers ${new Date(info.fromMs).getUTCFullYear()}–${new Date(info.untilMs - 1).getUTCFullYear()}.`
-    : 'Using this device’s own time zone rules, which may be out of date.';
-  zoneStamp.classList.toggle('warn', !info);
+  if (!info) {
+    zoneStamp.textContent = 'Zone data not loaded';
+    zoneStamp.title = 'Using this device’s own time zone rules, which may be out of date.';
+    zoneStamp.classList.add('warn');
+    return;
+  }
+  const days = zoneDataCheckedDays();
+  const stale = zoneDataStaleDays() !== null;
+  const checked = days === null ? ''
+    : stale ? `, not checked for ${days} days`
+    : days === 0 ? ', checked today'
+    : days === 1 ? ', checked yesterday'
+    : `, checked ${days} days ago`;
+  zoneStamp.textContent = `Zone data ${info.version}${checked}`;
+  zoneStamp.title = `Time zone rules from IANA release ${info.version}, built ${info.built}. `
+    + `Covers ${new Date(info.fromMs).getUTCFullYear()}–${new Date(info.untilMs - 1).getUTCFullYear()}.`
+    + (zoneCheckedMs === null ? '' : ` Last checked for updates ${new Date(zoneCheckedMs).toLocaleDateString()}.`);
+  zoneStamp.classList.toggle('warn', stale);
 }
 
 function renderTimeline() {
@@ -1215,7 +1256,11 @@ function init() {
   });
   window.addEventListener('resize', fitZoneInput);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) tickClock();
+    if (document.hidden) return;
+    tickClock();
+    renderZoneStamp();
+    // a page left open for days asks again when it's looked at
+    if (Date.now() - (zoneCheckedMs ?? 0) > ZONE_RECHECK_AFTER) checkZoneData().then(afterZoneCheck);
   });
 
   tplName.addEventListener('input', () => {
@@ -1262,39 +1307,78 @@ function init() {
   applyPage(initialPage);
 }
 
-// The app converts with its own copy of the time zone rules. If the file
-// can't be fetched or fails its checks, the device's own rules are used
-// and the page says so (see renderZoneNote).
-async function loadZoneData() {
-  // a fresh copy when the site answers in time, otherwise the browser's saved one
-  for (const cache of ['no-cache', 'force-cache']) {
-    const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), 8000);
-    try {
-      const res = await fetch('data/tzdata.json', { cache, signal: abort.signal });
-      if (res.ok && T.setZoneData(await res.json())) return true;
-    } catch { /* offline, blocked or too slow */ } finally {
-      clearTimeout(timer);
-    }
+// ---- zone data: saved copy and update check --------------------------------
+// The app converts with its own copy of the time zone rules. It keeps the
+// last good copy of data/tzdata.json on the device and starts from that,
+// so it opens at once and works offline. It then asks the site for the
+// current file: whatever valid file the site serves replaces the saved
+// one (the site is the authority, so a bad release can be rolled back),
+// and the time of that answer is kept so the page can warn when the data
+// has gone too long unchecked. With no copy at all the device's own
+// rules are used, and the page says so (see renderZoneNote).
+
+function loadSavedZoneData() {
+  try {
+    const text = localStorage.getItem(ZONE_DATA_KEY);
+    return text !== null && T.setZoneData(JSON.parse(text));
+  } catch {
+    return false;
   }
-  return false;
 }
 
-// Start as soon as the zone data is in. A slow connection doesn't hold the
-// page up: after a moment it starts on the device's rules (flagged), then
-// redraws once the file arrives.
+// Ask the site for the current data file. Resolves true when the rules
+// in use changed as a result.
+let zoneCheckRunning = false;
+async function checkZoneData() {
+  if (zoneCheckRunning) return false;
+  zoneCheckRunning = true;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 15_000);
+  try {
+    const res = await fetch('data/tzdata.json', { cache: 'no-cache', signal: abort.signal });
+    if (!res.ok) return false;
+    const text = await res.text();
+    const data = JSON.parse(text);
+    const have = T.zoneDataInfo();
+    const same = have !== null && data.version === have.version && data.built === have.built;
+    // a file that fails its checks changes nothing and doesn't count as a check
+    if (!same && !T.setZoneData(data)) return false;
+    zoneCheckedMs = Date.now();
+    try {
+      if (!same) localStorage.setItem(ZONE_DATA_KEY, text);
+      localStorage.setItem(ZONE_CHECK_KEY, String(zoneCheckedMs));
+    } catch { /* storage full or unavailable: fine for this visit */ }
+    return !same;
+  } catch {
+    return false;   // offline, blocked, too slow or unreadable
+  } finally {
+    clearTimeout(timer);
+    zoneCheckRunning = false;
+  }
+}
+
+function afterZoneCheck(changed) {
+  renderZoneStamp();
+  if (changed) {
+    computeAll();
+    if (state.page === 'slider') slider.open();
+  } else {
+    renderTimeline();
+  }
+}
+
+// Straight in when there is a saved copy. On a first visit, wait for the
+// file, but not for long: a slow connection starts the page on the
+// device's rules (flagged) and it redraws once the file arrives.
 let started = false;
 function start() {
   if (started) return;
   started = true;
   init();
 }
-loadZoneData().then((loaded) => {
-  if (started && loaded) {
-    renderZoneStamp();
-    computeAll();
-    if (state.page === 'slider') slider.open();
-  }
+if (loadSavedZoneData()) start();
+else setTimeout(start, 3000);
+checkZoneData().then((changed) => {
+  if (started) afterZoneCheck(changed);
   start();
 });
-setTimeout(start, 3000);
