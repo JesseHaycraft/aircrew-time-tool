@@ -69,7 +69,8 @@ function sanitizeEvents(raw) {
       : typeof e.offset === 'string' ? T.parseOffset(e.offset)
       : null;
     if (offsetMin === null) continue;
-    const id = typeof e.id === 'string' && e.id && !ids.has(e.id) ? e.id : newId();
+    const id = typeof e.id === 'string' && e.id && !ids.has(e.id)
+      && e.id !== 'takeoff' && e.id !== 'landing' ? e.id : newId();
     ids.add(id);
     events.push({
       id,
@@ -223,7 +224,6 @@ const tplEditorView = $('tpl-editor-view');
 const tplList = $('tpl-list');
 const tplName = $('tpl-name');
 const tplEvents = $('tpl-events');
-const tplTakeoffCdSlot = $('tpl-takeoff-cd');
 const tplLandingCdSlot = $('tpl-landing-cd');
 const tplLandingInclude = $('tpl-landing-include');
 
@@ -520,8 +520,15 @@ function renderTimeline() {
   const dayText = (p) => `${p.weekday} ${Number(p.day)}`;
 
   for (const { ev, zp, lp } of rows) {
+    const name = el('soe-name', ev.name);
+    if (ev.countdown && ev.ms !== null) {
+      const cd = document.createElement('span');
+      cd.className = 'soe-countdown';
+      cd.dataset.target = String(ev.ms);
+      name.append(' ', cd);
+    }
     const left = el('soe-left');
-    left.append(el('soe-name', ev.name));
+    left.append(name);
     // takeoff and landing come from the Frag page, not from an offset
     if (ev.from) left.append(el('soe-off', ev.from));
     const main = el('soe-main');
@@ -537,11 +544,6 @@ function renderTimeline() {
       main.append(left, times);
     }
     row.append(main);
-    if (ev.countdown && ev.ms !== null) {
-      const cd = el('soe-countdown');
-      cd.dataset.target = String(ev.ms);
-      row.append(cd);
-    }
     timelineEl.append(row);
   }
   tickCountdowns();
@@ -813,6 +815,7 @@ function draftFromText(d) {
 
 // The editor lists events in time order, as the SOEs page does. Without a
 // flight duration, what hangs off the landing goes after everything else.
+// Returns each event's place on that scale, where the takeoff is 0.
 function sortDraftEvents() {
   const flight = takeoffMs !== null && landingMs !== null ? landingMs - takeoffMs : 1e12;
   const times = T.resolveEventTimes(
@@ -821,6 +824,7 @@ function sortDraftEvents() {
   );
   const at = (d) => times.get(d.id) ?? 1e15;
   draft.events.sort((a, b) => at(a) - at(b));
+  return at;
 }
 
 function uniqueTemplateName(base) {
@@ -949,28 +953,39 @@ function renderTemplateList() {
 
 // One event is open for editing at a time; the rest are lines to tap.
 // The list is put back in time order whenever it is redrawn, which never
-// happens while an event's fields are being typed in.
+// happens while an event's fields are being typed in. The takeoff is in
+// the list at its place in time: it can't be renamed, retimed or deleted,
+// only given a countdown.
 function renderTemplateEditor({ focusName = false } = {}) {
   tplName.value = draft.name;
-  sortDraftEvents();
+  const at = sortDraftEvents();
   tplEvents.replaceChildren();
-  let openItem = null;
+  let takeoffPlaced = false;
+  const placeTakeoff = () => {
+    tplEvents.append(openEventId === 'takeoff' ? renderOpenTakeoff() : summaryItem({
+      id: 'takeoff',
+      name: 'Takeoff',
+      sub: 'From the Frag page',
+      countdown: draft.takeoffCountdown === true,
+    }));
+    takeoffPlaced = true;
+  };
   for (const ev of draft.events) {
-    if (ev.id === openEventId) {
-      openItem = renderOpenEvent(ev);
-      tplEvents.append(openItem);
-    } else {
-      tplEvents.append(renderEventSummary(ev));
-    }
+    if (!takeoffPlaced && at(ev) > 0) placeTakeoff();
+    tplEvents.append(ev.id === openEventId ? renderOpenEvent(ev) : summaryItem({
+      id: ev.id,
+      name: ev.name.trim(),
+      sub: draftFromText(ev),
+      subInvalid: draftOffsetMin(ev) === null,
+      countdown: ev.countdown === true,
+    }));
   }
+  if (!takeoffPlaced) placeTakeoff();
+  const openItem = tplEvents.querySelector('.ev-item.open');
   if (openItem) {
     openItem.scrollIntoView({ block: 'nearest' });
-    if (focusName) openItem.querySelector('.ev-name').focus();
+    if (focusName) openItem.querySelector('.ev-name')?.focus();
   }
-  tplTakeoffCdSlot.replaceChildren(stopwatchToggle(
-    () => draft.takeoffCountdown === true,
-    (on) => { draft.takeoffCountdown = on; },
-  ));
   tplLandingInclude.checked = draft.includeLanding !== false;
   tplLandingCdSlot.replaceChildren(stopwatchToggle(
     () => draft.landingCountdown === true,
@@ -985,44 +1000,35 @@ function iconSpan(cls, svg) {
   return span;
 }
 
-// An event in the list: its name over where its time comes from.
-function renderEventSummary(ev) {
+// An event in the list: its name over where its time comes from. Tapping
+// it opens it.
+function summaryItem({ id, name, sub, subInvalid = false, countdown }) {
   const item = document.createElement('button');
   item.type = 'button';
   item.className = 'ev-item ev-summary';
   const text = document.createElement('span');
   text.className = 'ev-sum-text';
-  const name = document.createElement('span');
-  name.className = 'ev-sum-name';
-  name.textContent = ev.name.trim() || 'Unnamed event';
-  name.classList.toggle('unnamed', ev.name.trim() === '');
-  const from = document.createElement('span');
-  from.className = 'ev-sum-from';
-  from.textContent = draftFromText(ev);
-  from.classList.toggle('invalid', draftOffsetMin(ev) === null);
-  text.append(name, from);
+  const nameEl = document.createElement('span');
+  nameEl.className = 'ev-sum-name';
+  nameEl.textContent = name || 'Unnamed event';
+  nameEl.classList.toggle('unnamed', name === '');
+  const subEl = document.createElement('span');
+  subEl.className = 'ev-sum-from';
+  subEl.textContent = sub;
+  subEl.classList.toggle('invalid', subInvalid);
+  text.append(nameEl, subEl);
   item.append(text);
-  if (ev.countdown) item.append(iconSpan('ev-sum-cd', STOPWATCH_SVG));
+  if (countdown) item.append(iconSpan('ev-sum-cd', STOPWATCH_SVG));
   item.append(iconSpan('ev-chev', CHEVRON_SVG));
   item.addEventListener('click', () => {
-    openEventId = ev.id;
+    openEventId = id;
     renderTemplateEditor();
   });
   return item;
 }
 
-// The open event: its name; then "3:15 before Takeoff" as three fields;
-// then its countdown and Delete.
-function renderOpenEvent(ev) {
-  const nameIn = document.createElement('input');
-  nameIn.className = 'ev-name';
-  nameIn.value = ev.name;
-  nameIn.placeholder = 'Event name';
-  nameIn.autocomplete = 'off';
-  nameIn.addEventListener('input', () => {
-    ev.name = nameIn.value;
-  });
-
+// The arrow that closes the open event.
+function closeEventButton() {
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'ev-close';
@@ -1032,6 +1038,53 @@ function renderOpenEvent(ev) {
   close.addEventListener('click', () => {
     openEventId = null;
     renderTemplateEditor();
+  });
+  return close;
+}
+
+// "Countdown on" / "Countdown off", amber when on.
+function countdownButton(get, set) {
+  const cd = document.createElement('button');
+  cd.type = 'button';
+  cd.className = 'ev-cd-wide';
+  const text = document.createElement('span');
+  cd.append(iconSpan('', STOPWATCH_SVG), text);
+  const sync = () => {
+    cd.setAttribute('aria-pressed', String(get()));
+    text.textContent = get() ? 'Countdown on' : 'Countdown off';
+  };
+  cd.addEventListener('click', () => {
+    set(!get());
+    sync();
+  });
+  sync();
+  return cd;
+}
+
+// The takeoff, open: only its countdown can be changed.
+function renderOpenTakeoff() {
+  const top = el('ev-line');
+  top.append(el('ev-fixed-name', 'Takeoff'), closeEventButton());
+  const foot = el('ev-line ev-foot');
+  foot.append(countdownButton(
+    () => draft.takeoffCountdown === true,
+    (on) => { draft.takeoffCountdown = on; },
+  ));
+  const item = el('ev-item open');
+  item.append(top, foot);
+  return item;
+}
+
+// An event, open: its name; then "3:15 before Takeoff" as three fields;
+// then its countdown and Delete.
+function renderOpenEvent(ev) {
+  const nameIn = document.createElement('input');
+  nameIn.className = 'ev-name';
+  nameIn.value = ev.name;
+  nameIn.placeholder = 'Event name';
+  nameIn.autocomplete = 'off';
+  nameIn.addEventListener('input', () => {
+    ev.name = nameIn.value;
   });
 
   const offIn = document.createElement('input');
@@ -1082,21 +1135,6 @@ function renderOpenEvent(ev) {
     ev.source = select.value;
   });
 
-  const cd = document.createElement('button');
-  cd.type = 'button';
-  cd.className = 'ev-cd-wide';
-  const cdText = document.createElement('span');
-  cd.append(iconSpan('', STOPWATCH_SVG), cdText);
-  const syncCd = () => {
-    cd.setAttribute('aria-pressed', String(ev.countdown === true));
-    cdText.textContent = ev.countdown ? 'Countdown on' : 'Countdown off';
-  };
-  cd.addEventListener('click', () => {
-    ev.countdown = !ev.countdown;
-    syncCd();
-  });
-  syncCd();
-
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'danger';
@@ -1108,11 +1146,14 @@ function renderOpenEvent(ev) {
   });
 
   const top = el('ev-line');
-  top.append(nameIn, close);
+  top.append(nameIn, closeEventButton());
   const sentence = el('ev-line');
   sentence.append(offIn, when, select);
   const foot = el('ev-line ev-foot');
-  foot.append(cd, del);
+  foot.append(countdownButton(
+    () => ev.countdown === true,
+    (on) => { ev.countdown = on; },
+  ), del);
   const item = el('ev-item open');
   item.append(top, sentence, foot);
   return item;
