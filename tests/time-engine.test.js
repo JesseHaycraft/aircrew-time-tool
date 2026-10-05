@@ -5,7 +5,7 @@ import {
   parseOffset, offsetToHMM, resolveJulianYear, makeUtcInstant,
   zonedParts, isValidZone, buildCopyText,
   zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName, zoneWallToUtc,
-  daySegments, formatCountdown, zoneRegionName, sunEvents, nightIntervals, parseDuration,
+  daySegments, formatCountdown, sunEvents, nightIntervals, parseDuration,
   setZoneData,
 } from '../js/time-engine.js';
 import { readFileSync } from 'node:fs';
@@ -179,16 +179,6 @@ test('countdown formatting', () => {
   assert.equal(formatCountdown(t, t - (29 * 60 + 20) * min), 'in 1day 5hrs 20mins');
   assert.equal(formatCountdown(t, t + 7 * min), '7mins ago');
   assert.equal(formatCountdown(t, t + (50 * 60) * min), '2days 2hrs ago');
-});
-
-test('region zone names', () => {
-  const t = Date.UTC(2026, 8, 10);
-  assert.equal(zoneRegionName(t, 'America/New_York'), 'America - Eastern');
-  assert.equal(zoneRegionName(t, 'America/Phoenix'), 'America - Mountain');
-  assert.equal(zoneRegionName(t, 'Pacific/Guam'), 'Pacific - Chamorro');
-  assert.equal(zoneRegionName(t, 'Europe/London'), 'Europe - United Kingdom');
-  assert.equal(zoneRegionName(t, 'Asia/Tokyo'), 'Asia - Japan');
-  assert.equal(zoneRegionName(t, 'Pacific/Honolulu'), 'Pacific - Hawaii-Aleutian');
 });
 
 const near = (actual, expected, tolMin, label) => {

@@ -58,7 +58,7 @@ export function initSlider({
       label.className = 'sl-label';
       const nameEl = document.createElement('span');
       nameEl.className = 'sl-name';
-      nameEl.textContent = def.name ?? T.zoneRegionName(Date.now(), def.zone);
+      nameEl.textContent = def.name ?? T.zoneLabel(def.zone);
       const subEl = document.createElement('span');
       subEl.className = 'sl-sub';
       label.append(nameEl, subEl);
@@ -125,7 +125,7 @@ export function initSlider({
       row.strip.style.transform = `translateX(${shift}px)`;
 
       row.timeEl.textContent = T.zonedParts(shownT(), row.zone).hhmm;
-      const abbr = T.zoneDisplayName(sliderT, row.zone);
+      const abbr = T.zoneAbbr(sliderT, row.zone);
       row.subEl.textContent = [
         abbr !== 'UTC' ? abbr : null,
         T.utcOffsetLabel(sliderT, row.zone),

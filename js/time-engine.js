@@ -236,7 +236,6 @@ function formatterFor(zone, kind = 'parts') {
       },
       offset: { timeZone: zone, timeZoneName: 'shortOffset' },
       long: { timeZone: zone, timeZoneName: 'long' },
-      generic: { timeZone: zone, timeZoneName: 'longGeneric' },
       wall: {
         timeZone: zone, hourCycle: 'h23',
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -373,19 +372,6 @@ export function daySegments(zone, fromMs, toMs) {
 // "America/New_York" → "New York"
 export function zoneLabel(zone) {
   return zone.split('/').pop().replaceAll('_', ' ');
-}
-
-// "America/New_York" → "America - Eastern", "Pacific/Guam" → "Pacific -
-// Chamorro": the IANA region plus the zone's generic (non-DST) name with
-// the "Time" / "Standard Time" tail dropped. Zones the platform has no
-// generic name for ("GMT+10") fall back to the city.
-export function zoneRegionName(ms, zone) {
-  const region = zone.includes('/') ? zone.split('/')[0].replaceAll('_', ' ') : '';
-  let generic = timeZonePart(ms, zone, 'generic')
-    .replace(/\s+(Standard|Daylight|Summer)\s+Time$/i, '')
-    .replace(/\s+Time$/i, '');
-  if (!generic || /^(GMT|UTC)/.test(generic)) generic = zoneLabel(zone);
-  return region ? `${region} - ${generic}` : generic;
 }
 
 // ---- sunrise / sunset (NOAA solar calculator equations) ----

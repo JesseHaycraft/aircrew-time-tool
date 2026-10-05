@@ -1044,7 +1044,7 @@ function renderSzList() {
     main.className = 'sz-main';
     const name = document.createElement('span');
     name.className = 'sz-name';
-    name.textContent = r.title ?? T.zoneRegionName(Date.now(), r.zone);
+    name.textContent = r.title ?? T.zoneLabel(r.zone);
     const sub = document.createElement('span');
     sub.className = 'sz-sub';
     sub.textContent = `${r.zone} · ${T.utcOffsetLabel(Date.now(), r.zone)}`;
