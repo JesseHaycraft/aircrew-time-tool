@@ -2,8 +2,8 @@
 // line. The line is the selected instant; bars carry local-day segments
 // whose widths come from real midnight boundaries (23/25 h across DST),
 // tinted by calendar day with the night hours darker.
-import * as T from './time-engine.js?v=0.5.0';
-import { zoneCoords } from './zone-coords.js?v=0.5.0';
+import * as T from './time-engine.js?v=0.5.1';
+import { zoneCoords } from './zone-coords.js?v=0.5.1';
 
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
@@ -35,7 +35,7 @@ export function initSlider({
   const snapTo = (ms, step) => Math.round(ms / step) * step;
   const nowMin = () => snapTo(Date.now(), MINUTE);
   let fling = null;      // { v: slider ms per real ms, last: performance.now(), pos: float ms }
-  let exactReadout = false; // ±1 / Takeoff / Landing show the exact minute; sliding rounds again
+  let exactReadout = false; // ±1 / Now / Takeoff / Landing show the exact minute; sliding rounds again
   const shownT = () => (exactReadout ? sliderT : snapTo(sliderT, READOUT_STEP));
 
   function rowDefs() {
@@ -254,7 +254,7 @@ export function initSlider({
     setT(sliderT + d / PX_PER_MS / 4);
   }, { passive: false });
 
-  nowBtn.addEventListener('click', () => setT(nowMin(), 'now'));
+  nowBtn.addEventListener('click', () => setT(nowMin(), 'now', true));
   takeoffBtn.addEventListener('click', () => {
     const t = getTakeoffMs();
     if (t !== null) setT(t, 'takeoff', true);
@@ -286,7 +286,7 @@ export function initSlider({
     const now = nowMin();
     if (now === lastTick) return;
     lastTick = now;
-    if (mode === 'now') setT(now, 'now');
+    if (mode === 'now') setT(now, 'now', true);
     else schedule();
   }, 5_000);
 
@@ -299,10 +299,12 @@ export function initSlider({
     if (sliderT === null) {
       sliderT = nowMin();
       mode = 'now';
+      exactReadout = true;
       seededFrom = takeoff;
     } else if (takeoff !== null && takeoff !== seededFrom) {
       sliderT = snapTo(takeoff, MINUTE);
       mode = 'takeoff';
+      exactReadout = true;
       seededFrom = takeoff;
     }
     takeoffBtn.disabled = takeoff === null;

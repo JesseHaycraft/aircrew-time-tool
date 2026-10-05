@@ -6,7 +6,7 @@ A one-screen utility for flight crews: take the Julian day + Zulu takeoff time f
 
 ## Status
 
-v0.5.0 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
+v0.5.1 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
 
 ## Features (v0.1)
 
@@ -41,5 +41,5 @@ No build step. Clone the repo and open `index.html`, or serve the folder with an
 All time math lives in `js/time-engine.js` (pure functions, no DOM). Run its tests with:
 
 ```sh
-node --test tests/*.test.js
+npm test
 ```
