@@ -230,6 +230,8 @@ const tplLandingInclude = $('tpl-landing-include');
 // The editor works on a draft copy; Save commits it, ‹ Templates discards.
 let draft = null;
 let draftIsNew = false;
+// The draft event open for editing in the editor's list, if any.
+let openEventId = null;
 // Template row currently showing its inline delete confirmation.
 let confirmDeleteId = null;
 
@@ -801,18 +803,24 @@ function sourceOptions(ev) {
   ];
 }
 
-// The source lists follow the events' names and each other's choices.
-let sourceSelects = [];
-function refreshSourceOptions() {
-  for (const { ev, select } of sourceSelects) {
-    select.replaceChildren(...sourceOptions(ev).map(([value, label]) => {
-      const opt = document.createElement('option');
-      opt.value = value;
-      opt.textContent = label;
-      return opt;
-    }));
-    select.value = ev.source;
-  }
+// "Takeoff − 3:15": a draft event's line in the list.
+function draftFromText(d) {
+  const source = d.source === 'takeoff' ? 'Takeoff'
+    : d.source === 'landing' ? 'Landing'
+    : (draft.events.find((o) => o.id === d.source)?.name.trim() || 'Unnamed event');
+  return `${source} ${d.after ? '+' : '\u2212'} ${d.offsetText.trim() || '?'}`;
+}
+
+// The editor lists events in time order, as the SOEs page does. Without a
+// flight duration, what hangs off the landing goes after everything else.
+function sortDraftEvents() {
+  const flight = takeoffMs !== null && landingMs !== null ? landingMs - takeoffMs : 1e12;
+  const times = T.resolveEventTimes(
+    draft.events.map((d) => ({ id: d.id, source: d.source, offsetMin: draftOffsetMin(d) ?? 0 })),
+    0, flight,
+  );
+  const at = (d) => times.get(d.id) ?? 1e15;
+  draft.events.sort((a, b) => at(a) - at(b));
 }
 
 function uniqueTemplateName(base) {
@@ -939,88 +947,26 @@ function renderTemplateList() {
   }
 }
 
-function renderTemplateEditor() {
+// One event is open for editing at a time; the rest are lines to tap.
+// The list is put back in time order whenever it is redrawn, which never
+// happens while an event's fields are being typed in.
+function renderTemplateEditor({ focusName = false } = {}) {
   tplName.value = draft.name;
+  sortDraftEvents();
   tplEvents.replaceChildren();
-  sourceSelects = [];
+  let openItem = null;
   for (const ev of draft.events) {
-    const nameIn = document.createElement('input');
-    nameIn.className = 'ev-name';
-    nameIn.value = ev.name;
-    nameIn.placeholder = 'Event';
-    nameIn.addEventListener('input', () => {
-      ev.name = nameIn.value;
-      refreshSourceOptions();
-    });
-
-    const cd = stopwatchToggle(
-      () => ev.countdown === true,
-      (on) => { ev.countdown = on; },
-    );
-
-    const del = document.createElement('button');
-    del.className = 'row-x';
-    del.type = 'button';
-    del.textContent = '×';
-    del.title = 'Remove event';
-    del.addEventListener('click', () => {
-      removeDraftEvent(ev);
-      renderTemplateEditor();
-    });
-
-    const select = document.createElement('select');
-    select.className = 'ev-source';
-    select.setAttribute('aria-label', 'Counts from');
-    select.addEventListener('change', () => {
-      ev.source = select.value;
-      refreshSourceOptions();
-    });
-    sourceSelects.push({ ev, select });
-
-    const sign = document.createElement('button');
-    sign.className = 'ev-sign';
-    sign.type = 'button';
-    const syncSign = () => {
-      sign.textContent = ev.after ? '+' : '\u2212';
-      sign.title = ev.after ? 'After — tap for before' : 'Before — tap for after';
-      sign.setAttribute('aria-label', ev.after ? 'After' : 'Before');
-    };
-    sign.addEventListener('click', () => {
-      ev.after = !ev.after;
-      syncSign();
-    });
-    syncSign();
-
-    const offIn = document.createElement('input');
-    offIn.className = 'ev-offset';
-    offIn.value = ev.offsetText;
-    offIn.placeholder = '1:00';
-    offIn.inputMode = 'numeric';
-    offIn.maxLength = 6;
-    offIn.autocomplete = 'off';
-    offIn.setAttribute('aria-label', 'Hours and minutes');
-    const mark = () => offIn.classList.toggle('invalid', T.parseOffsetEntry(ev.offsetText) === null);
-    // the colon appears as it is typed; leaving the box tidies it to H:MM
-    offIn.addEventListener('input', () => {
-      offIn.value = T.formatDurationEntry(offIn.value);
-      ev.offsetText = offIn.value;
-      mark();
-    });
-    offIn.addEventListener('blur', () => {
-      const size = T.parseOffsetEntry(ev.offsetText);
-      if (size !== null) ev.offsetText = offIn.value = T.minutesToHMM(size);
-    });
-    mark();
-
-    const top = el('ev-line');
-    top.append(nameIn, cd, del);
-    const from = el('ev-line');
-    from.append(select, sign, offIn);
-    const row = el('ev-row');
-    row.append(top, from);
-    tplEvents.append(row);
+    if (ev.id === openEventId) {
+      openItem = renderOpenEvent(ev);
+      tplEvents.append(openItem);
+    } else {
+      tplEvents.append(renderEventSummary(ev));
+    }
   }
-  refreshSourceOptions();
+  if (openItem) {
+    openItem.scrollIntoView({ block: 'nearest' });
+    if (focusName) openItem.querySelector('.ev-name').focus();
+  }
   tplTakeoffCdSlot.replaceChildren(stopwatchToggle(
     () => draft.takeoffCountdown === true,
     (on) => { draft.takeoffCountdown = on; },
@@ -1031,6 +977,150 @@ function renderTemplateEditor() {
     (on) => { draft.landingCountdown = on; },
   ));
 }
+
+function iconSpan(cls, svg) {
+  const span = document.createElement('span');
+  span.className = cls;
+  span.innerHTML = svg;
+  return span;
+}
+
+// An event in the list: its name over where its time comes from.
+function renderEventSummary(ev) {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.className = 'ev-item ev-summary';
+  const text = document.createElement('span');
+  text.className = 'ev-sum-text';
+  const name = document.createElement('span');
+  name.className = 'ev-sum-name';
+  name.textContent = ev.name.trim() || 'Unnamed event';
+  name.classList.toggle('unnamed', ev.name.trim() === '');
+  const from = document.createElement('span');
+  from.className = 'ev-sum-from';
+  from.textContent = draftFromText(ev);
+  from.classList.toggle('invalid', draftOffsetMin(ev) === null);
+  text.append(name, from);
+  item.append(text);
+  if (ev.countdown) item.append(iconSpan('ev-sum-cd', STOPWATCH_SVG));
+  item.append(iconSpan('ev-chev', CHEVRON_SVG));
+  item.addEventListener('click', () => {
+    openEventId = ev.id;
+    renderTemplateEditor();
+  });
+  return item;
+}
+
+// The open event: its name; then "3:15 before Takeoff" as three fields;
+// then its countdown and Delete.
+function renderOpenEvent(ev) {
+  const nameIn = document.createElement('input');
+  nameIn.className = 'ev-name';
+  nameIn.value = ev.name;
+  nameIn.placeholder = 'Event name';
+  nameIn.autocomplete = 'off';
+  nameIn.addEventListener('input', () => {
+    ev.name = nameIn.value;
+  });
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'ev-close';
+  close.title = 'Close';
+  close.setAttribute('aria-label', 'Close this event');
+  close.append(iconSpan('ev-chev up', CHEVRON_SVG));
+  close.addEventListener('click', () => {
+    openEventId = null;
+    renderTemplateEditor();
+  });
+
+  const offIn = document.createElement('input');
+  offIn.className = 'ev-offset';
+  offIn.value = ev.offsetText;
+  offIn.placeholder = '1:00';
+  offIn.inputMode = 'numeric';
+  offIn.maxLength = 6;
+  offIn.autocomplete = 'off';
+  offIn.setAttribute('aria-label', 'Hours and minutes');
+  const mark = () => offIn.classList.toggle('invalid', T.parseOffsetEntry(ev.offsetText) === null);
+  // the colon appears as it is typed; leaving the box tidies it to H:MM
+  offIn.addEventListener('input', () => {
+    offIn.value = T.formatDurationEntry(offIn.value);
+    ev.offsetText = offIn.value;
+    mark();
+  });
+  offIn.addEventListener('blur', () => {
+    const size = T.parseOffsetEntry(ev.offsetText);
+    if (size !== null) ev.offsetText = offIn.value = T.minutesToHMM(size);
+  });
+  mark();
+
+  const when = document.createElement('button');
+  when.type = 'button';
+  when.className = 'ev-when';
+  const syncWhen = () => {
+    when.textContent = ev.after ? 'after' : 'before';
+    when.title = ev.after ? 'Tap for before' : 'Tap for after';
+  };
+  when.addEventListener('click', () => {
+    ev.after = !ev.after;
+    syncWhen();
+  });
+  syncWhen();
+
+  const select = document.createElement('select');
+  select.className = 'ev-source';
+  select.setAttribute('aria-label', 'Counts from');
+  for (const [value, label] of sourceOptions(ev)) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    select.append(opt);
+  }
+  select.value = ev.source;
+  select.addEventListener('change', () => {
+    ev.source = select.value;
+  });
+
+  const cd = document.createElement('button');
+  cd.type = 'button';
+  cd.className = 'ev-cd-wide';
+  const cdText = document.createElement('span');
+  cd.append(iconSpan('', STOPWATCH_SVG), cdText);
+  const syncCd = () => {
+    cd.setAttribute('aria-pressed', String(ev.countdown === true));
+    cdText.textContent = ev.countdown ? 'Countdown on' : 'Countdown off';
+  };
+  cd.addEventListener('click', () => {
+    ev.countdown = !ev.countdown;
+    syncCd();
+  });
+  syncCd();
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'danger';
+  del.textContent = 'Delete';
+  del.addEventListener('click', () => {
+    removeDraftEvent(ev);
+    openEventId = null;
+    renderTemplateEditor();
+  });
+
+  const top = el('ev-line');
+  top.append(nameIn, close);
+  const sentence = el('ev-line');
+  sentence.append(offIn, when, select);
+  const foot = el('ev-line ev-foot');
+  foot.append(cd, del);
+  const item = el('ev-item open');
+  item.append(top, sentence, foot);
+  return item;
+}
+
+const CHEVRON_SVG =
+  '<svg viewBox="0 0 12 8" width="12" height="8" fill="none" stroke="currentColor" '
+  + 'stroke-width="2" aria-hidden="true"><path d="M1 1l5 5 5-5"/></svg>';
 
 const STOPWATCH_SVG =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" '
@@ -1078,6 +1168,7 @@ function openEditorFor(tpl) {
     landingCountdown: tpl.landingCountdown === true,
     events: tpl.events.map(toDraftEvent),
   };
+  openEventId = null;
   draftIsNew = false;
   showEditorView();
 }
@@ -1091,6 +1182,7 @@ function openEditorForNew() {
     landingCountdown: false,
     events: [],
   };
+  openEventId = null;
   draftIsNew = true;
   showEditorView();
 }
@@ -1098,7 +1190,8 @@ function openEditorForNew() {
 function saveDraft() {
   const events = draft.events.map(fromDraftEvent);
   if (events.includes(null)) {
-    // an offset can't be read: outline it and keep the editor open
+    // an offset can't be read: open that event and keep the editor up
+    openEventId = draft.events[events.indexOf(null)].id;
     renderTemplateEditor();
     flash($('tpl-save'), 'Check offsets');
     return;
@@ -1364,10 +1457,12 @@ function init() {
     draft.name = tplName.value;
   });
   $('tpl-add-event').addEventListener('click', () => {
-    draft.events.push({
+    const ev = {
       id: newId(), name: '', source: 'takeoff', after: false, offsetText: '1:00', countdown: false,
-    });
-    renderTemplateEditor();
+    };
+    draft.events.push(ev);
+    openEventId = ev.id;
+    renderTemplateEditor({ focusName: true });
   });
 
   copyZuluSwitch.addEventListener('click', () => {

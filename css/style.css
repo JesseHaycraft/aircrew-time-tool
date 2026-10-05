@@ -270,29 +270,68 @@ button.danger:hover { border-color: var(--danger); }
   font-size: 0.85rem; color: var(--muted);
 }
 
-.tpl-events { display: flex; flex-direction: column; gap: 12px; }
-/* each event takes two lines: its name, countdown and delete; then what
-   it counts from, before or after, and by how much */
-.ev-row {
-  display: flex; flex-direction: column; gap: 6px;
-  padding-bottom: 12px; border-bottom: 1px solid var(--border);
+.tpl-section {
+  margin: 18px 0 8px;
+  font-size: 0.75rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.tpl-events { display: flex; flex-direction: column; gap: 6px; }
+/* one event: a line to tap in the list, or, when open, its fields */
+.ev-item {
+  background: #0f141c;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.ev-summary {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 9px 12px;
+  text-align: left;
+}
+.ev-sum-text { flex: 1; min-width: 0; }
+.ev-sum-name {
+  display: block; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ev-sum-name.unnamed { color: var(--muted); font-style: italic; }
+.ev-sum-from { display: block; font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+.ev-sum-from.invalid { color: var(--danger); }
+.ev-sum-cd { display: inline-flex; color: var(--accent); flex-shrink: 0; }
+.ev-chev { display: inline-flex; color: var(--muted); flex-shrink: 0; }
+.ev-chev.up { transform: rotate(180deg); }
+.ev-item.open {
+  border-color: var(--accent);
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 8px;
 }
 .ev-line { display: flex; gap: 8px; align-items: center; }
 .ev-line .ev-name { flex: 1; min-width: 0; }
+.ev-close {
+  width: 36px; height: 36px; flex-shrink: 0; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none;
+}
+/* reads as a sentence: 3:15 before Takeoff */
+.ev-offset { width: 76px; font-family: var(--mono); flex-shrink: 0; }
+.ev-when {
+  flex-shrink: 0; min-width: 70px; padding: 10px 8px;
+  color: var(--accent); background: #0f141c;
+}
 .ev-source {
   flex: 1; min-width: 0;
   font: inherit; color: var(--accent);
   background-color: #0f141c;
   border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 12px;
+  padding: 10px 8px;
 }
 .ev-source:focus { outline: none; border-color: var(--accent); }
-.ev-sign {
-  width: 44px; flex-shrink: 0; padding: 10px 0;
-  font-family: var(--mono); font-size: 1.1rem;
-  color: var(--accent); background: #0f141c;
+.ev-foot { justify-content: space-between; }
+.ev-foot button { font-size: 0.85rem; padding: 6px 12px; }
+.ev-cd-wide {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; color: var(--muted);
 }
-.ev-offset { width: 84px; font-family: var(--mono); flex-shrink: 0; }
+.ev-cd-wide[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: #1c2432; }
 
 /* stopwatch countdown toggle: amber = on (a user choice), grey = off */
 .ev-cd {
@@ -304,8 +343,6 @@ button.danger:hover { border-color: var(--danger); }
 .ev-cd:hover { border-color: var(--accent); color: var(--text); }
 .ev-cd[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: #1c2432; }
 
-/* fixed width so the editor header, event rows, and the takeoff row all
-   share one column grid */
 .row-x {
   border: none; background: transparent; color: var(--muted);
   cursor: pointer; font-size: 1rem; line-height: 1;
@@ -314,7 +351,8 @@ button.danger:hover { border-color: var(--danger); }
 }
 .row-x:hover { color: var(--danger); }
 
-/* same columns as .ev-row: [text][stopwatch][delete-width spacer] */
+/* takeoff and landing: not events to edit, only whether to count down
+   to them and whether the landing is listed */
 .tpl-takeoff-row {
   display: flex; gap: 8px; align-items: center;
   margin-top: 8px; color: var(--muted); font-size: 0.9rem;
@@ -326,7 +364,6 @@ button.danger:hover { border-color: var(--danger); }
 .tpl-takeoff-row .tpl-takeoff-cd { display: inline-flex; flex-shrink: 0; }
 .tpl-landing-text { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .tpl-landing-text input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
-.tpl-takeoff-row .h-sp { width: 28px; flex-shrink: 0; }
 
 .row-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
