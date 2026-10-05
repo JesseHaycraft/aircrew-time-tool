@@ -45,7 +45,8 @@ env:
 jobs:
   merge-waiting:
     name: Merge a proposal that has waited long enough
-    runs-on: ubuntu-latest
+    # a fixed image, so the build tools don't change underneath the build
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -85,7 +86,7 @@ jobs:
   propose:
     name: Propose an update when IANA has a new release
     needs: merge-waiting
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # The scheduled run works on main as it is now (the job above may
       # just have merged into it); a manual run works on the branch it
