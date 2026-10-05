@@ -109,7 +109,6 @@ function loadState() {
     // a Julian day is a Zulu day, so local time goes only with a calendar date
     timeMode: s.timeMode === 'local' && s.dateMode === 'calendar' ? 'local' : 'zulu',
     showZulu: s.showZulu !== undefined ? s.showZulu !== false : s.copyZulu !== false,
-    landingOpen: s.landingOpen === true,
     landingMode: ['local', 'duration'].includes(s.landingMode) ? s.landingMode : 'zulu',
     landingZulu: typeof s.landingZulu === 'string' ? s.landingZulu : '',
     landingLocal: typeof s.landingLocal === 'string' ? s.landingLocal : '',
@@ -162,8 +161,6 @@ const modeJulianBtn = $('mode-julian');
 const modeCalBtn = $('mode-cal');
 const modeZuluBtn = $('mode-zulu');
 const modeLocalBtn = $('mode-local');
-const landingToggle = $('landing-toggle');
-const landingBody = $('landing-body');
 const modeLZuluBtn = $('mode-lzulu');
 const modeLLocalBtn = $('mode-llocal');
 const modeLDurBtn = $('mode-ldur');
@@ -587,6 +584,9 @@ function computeAll() {
   const tm = T.parseTimeHHMM(state.time);
   timeInput.classList.toggle('invalid', state.time.trim() !== '' && tm === null);
   takeoffMs = null;
+  // The line under the entry boxes turns a Julian day into its calendar
+  // day. A Julian day resolves to its next occurrence, so a mistyped one
+  // lands months away; that is flagged.
   let resolvedText = null;
   let resolvedWarn = false;
 
@@ -608,6 +608,11 @@ function computeAll() {
       } else {
         const dd = new Date(Date.UTC(year, 0, doy));
         ymd = { y: year, mo: dd.getUTCMonth() + 1, d: dd.getUTCDate() };
+        const p = T.zonedParts(dd.getTime(), 'UTC');
+        const day = `${p.weekday} ${Number(p.day)} ${p.month} ${p.year}`;
+        const at = dd.getTime() + (tm ? (tm.h * 60 + tm.m) * 60_000 : 0);
+        resolvedWarn = at - Date.now() > FAR_TAKEOFF_DAYS * DAY_MS;
+        resolvedText = resolvedWarn ? `>${FAR_TAKEOFF_DAYS} days in future: ${day}` : day;
       }
     }
   }
@@ -616,15 +621,6 @@ function computeAll() {
     takeoffMs = state.timeMode === 'local'
       ? T.zoneWallToUtc(state.zone, ymd.y, ymd.mo, ymd.d, tm.h, tm.m)
       : Date.UTC(ymd.y, ymd.mo - 1, ymd.d, tm.h, tm.m);
-    // Read the takeoff day back, as entered: the Zulu day for a Zulu
-    // entry, the local day for a local one. A Julian day resolves to its
-    // next occurrence, so a mistyped one lands months away; flag that.
-    const p = T.zonedParts(takeoffMs, state.timeMode === 'local' ? state.zone : 'UTC');
-    const day = `${p.weekday} ${Number(p.day)} ${p.month} ${p.year}`;
-    resolvedWarn = takeoffMs - Date.now() > FAR_TAKEOFF_DAYS * DAY_MS;
-    resolvedText = resolvedWarn
-      ? `Takeoff >${FAR_TAKEOFF_DAYS} days in future: ${day}`
-      : `Takeoff ${day}`;
   }
 
   computeLanding();
@@ -692,8 +688,6 @@ function computeLanding() {
   modeLZuluBtn.classList.toggle('active', mode === 'zulu');
   modeLLocalBtn.classList.toggle('active', mode === 'local');
   modeLDurBtn.classList.toggle('active', mode === 'duration');
-  landingToggle.setAttribute('aria-expanded', String(state.landingOpen));
-  landingBody.hidden = !state.landingOpen;
 }
 
 // Shrink the zone field's font until the full value fits — a truncated
@@ -771,9 +765,6 @@ function setDateMode(mode) {
   saveState();
   updateModeUI();
   computeAll();
-  if (mode === 'calendar' && typeof calInput.showPicker === 'function') {
-    try { calInput.showPicker(); } catch { /* not allowed outside a gesture */ }
-  }
 }
 
 function setTimeMode(mode) {
@@ -1231,12 +1222,6 @@ function init() {
   modeZuluBtn.addEventListener('click', () => setTimeMode('zulu'));
   modeLocalBtn.addEventListener('click', () => setTimeMode('local'));
 
-  landingToggle.addEventListener('click', () => {
-    state.landingOpen = !state.landingOpen;
-    saveState();
-    computeLanding();
-    if (state.landingOpen) landingInput.focus();
-  });
   const setLandingMode = (mode) => {
     state.landingMode = mode;
     // each mode keeps its own entry; show it even if the box has focus

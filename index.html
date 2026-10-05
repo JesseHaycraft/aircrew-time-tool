@@ -61,25 +61,20 @@
   </section>
 
   <section class="card">
-    <button id="landing-toggle" type="button" class="card-toggle" aria-expanded="false" aria-controls="landing-body">
-      <h2>Landing (optional)</h2>
-      <span class="chev" aria-hidden="true">&rsaquo;</span>
-    </button>
-    <div id="landing-body" hidden>
-      <div class="mode-toggle landing-mode" role="group" aria-label="Enter landing as">
-        <button id="mode-lzulu" type="button">Zulu</button>
-        <button id="mode-llocal" type="button">Local</button>
-        <button id="mode-ldur" type="button">Duration</button>
+    <h2>Landing (optional)</h2>
+    <div class="mode-toggle landing-mode" role="group" aria-label="Enter landing as">
+      <button id="mode-lzulu" type="button">Zulu</button>
+      <button id="mode-llocal" type="button">Local</button>
+      <button id="mode-ldur" type="button">Duration</button>
+    </div>
+    <div class="inputs-row">
+      <div class="input-group">
+        <div id="landing-input-label" class="input-top">Landing time</div>
+        <input id="landing-input" inputmode="numeric" placeholder="1205" maxlength="5" autocomplete="off">
       </div>
-      <div class="inputs-row">
-        <div class="input-group">
-          <div id="landing-input-label" class="input-top">Landing time</div>
-          <input id="landing-input" inputmode="numeric" placeholder="1205" maxlength="5" autocomplete="off">
-        </div>
-        <div class="input-group">
-          <div id="landing-calc-label" class="input-top">&nbsp;</div>
-          <div id="landing-calc" class="landing-calc"></div>
-        </div>
+      <div class="input-group">
+        <div id="landing-calc-label" class="input-top">&nbsp;</div>
+        <div id="landing-calc" class="landing-calc"></div>
       </div>
     </div>
   </section>
