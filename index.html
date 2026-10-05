@@ -11,23 +11,20 @@
 </head>
 <body>
 <header>
-  <h1>Aircrew Time Tool</h1>
+  <h1 id="page-title">Frag</h1>
 </header>
 <main>
-  <nav class="page-nav">
-    <button id="page-julian" type="button" class="active">Julian SOEs</button>
-    <button id="page-slider" type="button">Convert timezones</button>
-  </nav>
+  <div id="frag-page">
+  <div class="date-mode" role="group" aria-label="Enter dates as">
+    <button id="mode-julian" type="button">Julian day</button>
+    <button id="mode-cal" type="button">Calendar</button>
+  </div>
 
-  <div id="julian-page">
   <section class="card">
     <h2>Takeoff</h2>
     <div class="inputs-row">
       <div class="input-group">
-        <div class="input-top mode-toggle">
-          <button id="mode-julian" type="button">Julian day</button>
-          <button id="mode-cal" type="button">Calendar</button>
-        </div>
+        <div id="date-label" class="input-top">Julian day</div>
         <input id="doy" inputmode="numeric" placeholder="254" maxlength="3" autocomplete="off">
         <input id="caldate" type="date" hidden>
       </div>
@@ -39,6 +36,8 @@
         <input id="ztime" inputmode="numeric" placeholder="0530" maxlength="5" autocomplete="off">
       </div>
     </div>
+    <p id="resolved" class="resolved empty">Enter Julian day and takeoff time&hellip;</p>
+    <div id="takeoff-summary" class="takeoff-summary" hidden></div>
   </section>
 
   <section class="card">
@@ -75,7 +74,9 @@
     </div>
     <p class="hint">Zulu times convert to/from this zone (defaults to your device&rsquo;s zone).</p>
   </section>
+  </div>
 
+  <div id="soes-page" hidden>
   <section class="card results">
     <h2>Sequence of Events</h2>
     <div class="tpl-row">
@@ -89,7 +90,7 @@
       <button id="tpl-manage-btn" type="button" class="ghost">Manage&hellip;</button>
     </div>
     <p id="clock" class="clock"></p>
-    <p id="resolved" class="resolved empty">Enter Julian day and Zulu time&hellip;</p>
+    <p id="soe-empty" class="resolved empty">Enter a takeoff time on the Frag page&hellip;</p>
     <p id="zone-note" class="resolved warn" hidden></p>
     <div class="table-wrap">
       <table id="timeline-table" hidden>
@@ -110,7 +111,7 @@
   </section>
   </div>
 
-  <div id="slider-page" hidden>
+  <div id="convert-page" hidden>
     <section class="card slider-card">
       <div class="slider-controls">
         <button id="slider-minus" type="button" class="ghost step">&minus;1</button>
@@ -137,7 +138,40 @@
       </div>
     </section>
   </div>
+
+  <div id="about-page" hidden>
+    <section class="card">
+      <h2>Aircrew Time Tool</h2>
+      <p class="about-line">Version <span id="version"></span></p>
+      <p class="hint">All times are computed on your device. The app downloads time zone updates and sends nothing about you.</p>
+    </section>
+    <section class="card">
+      <h2>Time zone data</h2>
+      <p id="zone-stamp" class="about-line"></p>
+      <p id="zone-detail" class="hint"></p>
+      <div class="row-actions about-check">
+        <button id="zone-check-btn" type="button">Check for updates</button>
+        <span id="zone-check-result" class="about-result" role="status"></span>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Feedback</h2>
+      <p class="about-line about-links">
+        <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues/new?labels=bug" target="_blank" rel="noopener">Report an issue</a>
+        <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues/new?labels=enhancement" target="_blank" rel="noopener">Suggest changes</a>
+      </p>
+    </section>
+  </div>
 </main>
+
+<nav class="page-bar" aria-label="Pages">
+  <div class="page-bar-inner">
+    <button id="page-frag" type="button">Frag</button>
+    <button id="page-soes" type="button">SOEs</button>
+    <button id="page-convert" type="button">Convert</button>
+    <button id="page-about" type="button">About</button>
+  </div>
+</nav>
 
 <div id="sz-overlay" class="overlay" hidden>
   <div class="overlay-panel">
@@ -208,13 +242,6 @@
   </div>
 </div>
 
-<footer>
-  <span id="version"></span> &middot;
-  <span id="zone-stamp"></span> &middot;
-  <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues/new?labels=bug" target="_blank" rel="noopener">Report an issue</a> &middot;
-  <a href="https://github.com/JesseHaycraft/aircrew-time-tool/issues/new?labels=enhancement" target="_blank" rel="noopener">Suggest changes</a> &middot;
-  <span>All times are computed on your device. The app downloads time zone updates and sends nothing about you.</span>
-</footer>
 <script type="module" src="js/app.js?v=0.6.1"></script>
 </body>
 </html>

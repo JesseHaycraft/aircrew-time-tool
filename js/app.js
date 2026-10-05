@@ -44,6 +44,12 @@ try {
 
 const todayUtcStr = () => new Date().toISOString().slice(0, 10);
 
+// The pages, in page-bar order, with the name each shows in the header.
+const PAGES = { frag: 'Frag', soes: 'SOEs', convert: 'Convert', about: 'About' };
+// Page names saved or bookmarked by versions before the three-page layout.
+const OLD_PAGES = { julian: 'frag', slider: 'convert' };
+const pageFromName = (name) => (Object.hasOwn(PAGES, name) ? name : OLD_PAGES[name] ?? null);
+
 let state = loadState();
 let takeoffMs = null;
 let landingMs = null;   // from the Landing card, only when a takeoff is set too
@@ -87,7 +93,7 @@ function loadState() {
   const sliderZones = Array.isArray(s.sliderZones)
     ? [...new Set(s.sliderZones.filter((z) => typeof z === 'string' && T.isValidZone(z)))]
     : [];
-  // The slider used to pin the Julian-page zone; now only Zulu is fixed.
+  // The slider used to pin the Frag-page zone; now only Zulu is fixed.
   // Seed that zone as an ordinary (deletable) row once, so nobody loses it.
   if (s.sliderZonesInitialized !== true && zone !== 'UTC' && !sliderZones.includes(zone)) {
     sliderZones.unshift(zone);
@@ -95,7 +101,7 @@ function loadState() {
   return {
     doy: typeof s.doy === 'string' ? s.doy : '',
     time: typeof s.time === 'string' ? s.time : '',
-    page: s.page === 'slider' ? 'slider' : 'julian',
+    page: pageFromName(s.page) ?? 'frag',
     sliderZones,
     sliderZonesInitialized: true,
     dateMode: s.dateMode === 'calendar' ? 'calendar' : 'julian',
@@ -161,9 +167,15 @@ const landingInput = $('landing-input');
 const landingCalc = $('landing-calc');
 const landingCalcLabel = $('landing-calc-label');
 const timeInput = $('ztime');
+const dateLabel = $('date-label');
 const resolvedEl = $('resolved');
+const takeoffSummary = $('takeoff-summary');
+const soeEmpty = $('soe-empty');
 const zoneNote = $('zone-note');
 const zoneStamp = $('zone-stamp');
+const zoneDetail = $('zone-detail');
+const zoneCheckBtn = $('zone-check-btn');
+const zoneCheckResult = $('zone-check-result');
 const clockEl = $('clock');
 const zoneInput = $('zone-input');
 const suggestEl = $('zone-suggest');
@@ -411,7 +423,7 @@ function renderZoneNote(instants) {
     text = 'Not covered by the app’s time zone data — using this device’s own rules for these times.';
   } else if (staleDays !== null) {
     text = `Time zone data hasn’t been checked for updates in ${staleDays} days — `
-      + 'go online and reopen the app to check.';
+      + 'go online and check from the About page.';
   }
   zoneNote.hidden = text === '';
   zoneNote.textContent = text;
@@ -428,15 +440,15 @@ function zoneDataStaleDays() {
   return days !== null && days >= ZONE_STALE_DAYS ? days : null;
 }
 
-// Footer stamp: which release of the time zone rules the app is running
-// on and when it last checked for a newer one, the way a chart carries
-// its edition and currency.
+// About-page stamp: which release of the time zone rules the app is
+// running on and when it last checked for a newer one, the way a chart
+// carries its edition and currency.
 function renderZoneStamp() {
   const info = T.zoneDataInfo();
   if (!info) {
-    zoneStamp.textContent = 'Zone data not loaded';
-    zoneStamp.title = 'Using this device’s own time zone rules, which may be out of date.';
+    zoneStamp.textContent = 'Not loaded';
     zoneStamp.classList.add('warn');
+    zoneDetail.textContent = 'Using this device’s own time zone rules, which may be out of date.';
     return;
   }
   const days = zoneDataCheckedDays();
@@ -446,15 +458,16 @@ function renderZoneStamp() {
     : days === 0 ? ', checked today'
     : days === 1 ? ', checked yesterday'
     : `, checked ${days} days ago`;
-  zoneStamp.textContent = `Zone data ${info.version}${checked}`;
-  zoneStamp.title = `Time zone rules from IANA release ${info.version}, built ${info.built}. `
-    + `Covers ${new Date(info.fromMs).getUTCFullYear()}–${new Date(info.untilMs - 1).getUTCFullYear()}.`
-    + (zoneCheckedMs === null ? '' : ` Last checked for updates ${new Date(zoneCheckedMs).toLocaleDateString()}.`);
+  zoneStamp.textContent = `IANA release ${info.version}${checked}`;
   zoneStamp.classList.toggle('warn', stale);
+  zoneDetail.textContent = `Built ${info.built}. `
+    + `Covers ${new Date(info.fromMs).getUTCFullYear()}–${new Date(info.untilMs - 1).getUTCFullYear()}. `
+    + 'The app checks for a newer release whenever it is opened online.';
 }
 
 function renderTimeline() {
   copyBtn.disabled = takeoffMs === null;
+  soeEmpty.hidden = takeoffMs !== null;
   if (takeoffMs === null) {
     timelineTable.hidden = true;
     renderZoneNote([]);
@@ -565,6 +578,29 @@ function tickClock() {
   clockTimer = setTimeout(tickClock, 60_000 - (now % 60_000) + 250);
 }
 
+// The takeoff read back under its inputs, in Zulu and in the local zone,
+// so a mistyped day or the wrong zone shows before leaving the page.
+function renderTakeoffSummary() {
+  takeoffSummary.hidden = takeoffMs === null;
+  takeoffSummary.replaceChildren();
+  if (takeoffMs === null) return;
+  const cell = (cls, text) => {
+    const span = document.createElement('span');
+    span.className = cls;
+    span.textContent = text;
+    return span;
+  };
+  for (const [zone, label] of [['UTC', 'Zulu'], [state.zone, `Local (${T.zoneLabel(state.zone)})`]]) {
+    const p = T.zonedParts(takeoffMs, zone);
+    takeoffSummary.append(
+      cell('ts-date', `${Number(p.day)} ${p.month}`),
+      cell('ts-at', 'at'),
+      cell('ts-time', p.hhmm),
+      cell('ts-zone', label),
+    );
+  }
+}
+
 function computeAll() {
   const tm = T.parseTimeHHMM(state.time);
   timeInput.classList.toggle('invalid', state.time.trim() !== '' && tm === null);
@@ -600,8 +636,8 @@ function computeAll() {
     takeoffMs = state.timeMode === 'local'
       ? T.zoneWallToUtc(state.zone, ymd.y, ymd.mo, ymd.d, tm.h, tm.m)
       : Date.UTC(ymd.y, ymd.mo - 1, ymd.d, tm.h, tm.m);
-    // The takeoff itself is read off the table; the line above it only
-    // speaks up when the day resolved to next year.
+    // The takeoff itself is read back below; this line only speaks up
+    // when the day resolved to next year.
     if (dayNote) {
       const p = T.zonedParts(takeoffMs, 'UTC');
       resolvedText = `Takeoff is next year: ${p.weekday} ${p.day} ${p.month} ${p.year}`;
@@ -620,6 +656,7 @@ function computeAll() {
   resolvedEl.hidden = resolvedText === null;
   resolvedEl.textContent = resolvedText ?? '';
   resolvedEl.className = resolvedClass;
+  renderTakeoffSummary();
   if (document.activeElement !== zoneInput) {
     zoneInput.value = zoneDisplayValue();
     zoneInput.scrollLeft = 0;
@@ -738,6 +775,7 @@ function updateModeUI() {
   calInput.hidden = !cal;
   modeJulianBtn.classList.toggle('active', !cal);
   modeCalBtn.classList.toggle('active', cal);
+  dateLabel.textContent = cal ? 'Date' : 'Julian day';
   const local = state.timeMode === 'local';
   modeZuluBtn.classList.toggle('active', !local);
   modeLocalBtn.classList.toggle('active', local);
@@ -1059,10 +1097,13 @@ function closeManager() {
   computeAll();
 }
 
-const julianPage = $('julian-page');
-const sliderPage = $('slider-page');
-const pageJulianBtn = $('page-julian');
-const pageSliderBtn = $('page-slider');
+const pageTitle = $('page-title');
+const pageEls = {};
+const pageBtns = {};
+for (const name of Object.keys(PAGES)) {
+  pageEls[name] = $(`${name}-page`);
+  pageBtns[name] = $(`page-${name}`);
+}
 const szOverlay = $('sz-overlay');
 const szList = $('sz-list');
 const szAddInput = $('sz-add');
@@ -1076,7 +1117,7 @@ const slider = initSlider({
   landingBtn: $('slider-landing'),
   minusBtn: $('slider-minus'),
   plusBtn: $('slider-plus'),
-  // the device's real zone, not the Julian page's pick (which may be elsewhere)
+  // the device's real zone, not the Frag page's pick (which may be elsewhere)
   getLocalZone: () => deviceZone,
   getExtraZones: () => state.sliderZones,
   getTakeoffMs: () => takeoffMs,
@@ -1139,18 +1180,44 @@ function closeSzEditor() {
   slider.open();
 }
 
+let currentPage = null;
 function applyPage(page) {
-  state.page = page;
-  saveState();
-  julianPage.hidden = page !== 'julian';
-  sliderPage.hidden = page !== 'slider';
-  pageJulianBtn.classList.toggle('active', page === 'julian');
-  pageSliderBtn.classList.toggle('active', page === 'slider');
-  if (page === 'slider') slider.open();
+  currentPage = page;
+  // the app reopens on the working page last used, not on About
+  if (page !== 'about') {
+    state.page = page;
+    saveState();
+  }
+  pageTitle.textContent = PAGES[page];
+  for (const name of Object.keys(PAGES)) {
+    pageEls[name].hidden = name !== page;
+    pageBtns[name].classList.toggle('active', name === page);
+    if (name === page) pageBtns[name].setAttribute('aria-current', 'page');
+    else pageBtns[name].removeAttribute('aria-current');
+  }
+  window.scrollTo(0, 0);
+  if (page === 'convert') slider.open();
+  if (page === 'frag') fitZoneInput();
+  if (page === 'about') renderZoneStamp();
+}
+
+// About page: ask for the data file now instead of at the next opening.
+async function checkZoneDataNow() {
+  zoneCheckBtn.disabled = true;
+  zoneCheckResult.className = 'about-result';
+  zoneCheckResult.textContent = 'Checking…';
+  const result = await checkZoneData();
+  afterZoneCheck(result);
+  zoneCheckBtn.disabled = false;
+  const version = T.zoneDataInfo()?.version;
+  zoneCheckResult.classList.toggle('warn', result === 'failed');
+  zoneCheckResult.textContent = result === 'updated' ? `Updated to ${version}.`
+    : result === 'current' ? `Up to date (${version}).`
+    : 'Couldn’t check. Go online and try again.';
 }
 
 function init() {
-  $('version').textContent = VERSION;
+  $('version').textContent = VERSION.replace(/^v/, '');
   renderZoneStamp();
   doyInput.value = state.doy;
   calInput.value = state.calDate;
@@ -1292,17 +1359,19 @@ function init() {
 
   // page navigation, synced to the URL hash so the phone's back button
   // flips pages instead of leaving the app
-  pageJulianBtn.addEventListener('click', () => { location.hash = 'julian'; });
-  pageSliderBtn.addEventListener('click', () => { location.hash = 'slider'; });
+  for (const name of Object.keys(PAGES)) {
+    pageBtns[name].addEventListener('click', () => { location.hash = name; });
+  }
   window.addEventListener('hashchange', () => {
-    applyPage(location.hash === '#slider' ? 'slider' : 'julian');
+    const page = pageFromName(location.hash.slice(1)) ?? 'frag';
+    if (location.hash !== `#${page}`) history.replaceState(null, '', `#${page}`);
+    applyPage(page);
   });
+  zoneCheckBtn.addEventListener('click', checkZoneDataNow);
 
   computeAll();
 
-  const initialPage = location.hash === '#slider' ? 'slider'
-    : location.hash === '#julian' ? 'julian'
-    : state.page;
+  const initialPage = pageFromName(location.hash.slice(1)) ?? state.page;
   history.replaceState(null, '', `#${initialPage}`);
   applyPage(initialPage);
 }
@@ -1326,42 +1395,46 @@ function loadSavedZoneData() {
   }
 }
 
-// Ask the site for the current data file. Resolves true when the rules
-// in use changed as a result.
-let zoneCheckRunning = false;
-async function checkZoneData() {
-  if (zoneCheckRunning) return false;
-  zoneCheckRunning = true;
+// Ask the site for the current data file. Resolves 'updated' when the
+// rules in use changed as a result, 'current' when the site has the copy
+// already in use, 'failed' when there was no usable answer. Callers that
+// overlap share one request.
+let zoneCheck = null;
+function checkZoneData() {
+  zoneCheck ??= fetchZoneData().finally(() => { zoneCheck = null; });
+  return zoneCheck;
+}
+
+async function fetchZoneData() {
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), 15_000);
   try {
     const res = await fetch('data/tzdata.json', { cache: 'no-cache', signal: abort.signal });
-    if (!res.ok) return false;
+    if (!res.ok) return 'failed';
     const text = await res.text();
     const data = JSON.parse(text);
     const have = T.zoneDataInfo();
     const same = have !== null && data.version === have.version && data.built === have.built;
     // a file that fails its checks changes nothing and doesn't count as a check
-    if (!same && !T.setZoneData(data)) return false;
+    if (!same && !T.setZoneData(data)) return 'failed';
     zoneCheckedMs = Date.now();
     try {
       if (!same) localStorage.setItem(ZONE_DATA_KEY, text);
       localStorage.setItem(ZONE_CHECK_KEY, String(zoneCheckedMs));
     } catch { /* storage full or unavailable: fine for this visit */ }
-    return !same;
+    return same ? 'current' : 'updated';
   } catch {
-    return false;   // offline, blocked, too slow or unreadable
+    return 'failed';   // offline, blocked, too slow or unreadable
   } finally {
     clearTimeout(timer);
-    zoneCheckRunning = false;
   }
 }
 
-function afterZoneCheck(changed) {
+function afterZoneCheck(result) {
   renderZoneStamp();
-  if (changed) {
+  if (result === 'updated') {
     computeAll();
-    if (state.page === 'slider') slider.open();
+    if (currentPage === 'convert') slider.open();
   } else {
     renderTimeline();
   }
@@ -1378,7 +1451,7 @@ function start() {
 }
 if (loadSavedZoneData()) start();
 else setTimeout(start, 3000);
-checkZoneData().then((changed) => {
-  if (started) afterZoneCheck(changed);
+checkZoneData().then((result) => {
+  if (started) afterZoneCheck(result);
   start();
 });

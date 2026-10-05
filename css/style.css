@@ -26,13 +26,38 @@ body {
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-header { text-align: center; padding: 28px 16px 8px; }
+header { text-align: center; padding: 20px 16px 4px; }
 h1 { margin: 0; font-size: 1.5rem; letter-spacing: 0.02em; }
 
-main { max-width: 780px; margin: 0 auto; padding: 12px 16px 32px; }
+/* the bottom padding keeps the last card clear of the fixed page bar */
+main {
+  max-width: 780px; margin: 0 auto;
+  padding: 12px 16px calc(88px + env(safe-area-inset-bottom, 0px));
+}
 
-.page-nav { display: flex; justify-content: center; gap: 10px; margin: 2px 0 4px; flex-wrap: wrap; }
-.page-nav button {
+/* ---- page bar: the page buttons, fixed to the bottom of the screen ---- */
+.page-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.page-bar-inner { display: flex; max-width: 780px; margin: 0 auto; }
+.page-bar button {
+  flex: 1 1 0; min-width: 0;
+  border: none; border-top: 2px solid transparent; border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  padding: 14px 4px 16px;
+  white-space: nowrap;
+}
+.page-bar button:hover { color: var(--text); border-color: transparent; }
+.page-bar button.active { color: var(--accent); border-top-color: var(--accent); cursor: default; }
+
+/* Frag page: how dates are entered, for every date input below it */
+.date-mode { display: flex; justify-content: center; gap: 10px; margin: 2px 0 4px; flex-wrap: wrap; }
+.date-mode button {
   border: 1px solid var(--border);
   background: #0f141c;
   color: var(--muted);
@@ -42,8 +67,8 @@ main { max-width: 780px; margin: 0 auto; padding: 12px 16px 32px; }
   cursor: pointer;
   white-space: nowrap;
 }
-.page-nav button:hover { border-color: var(--accent); color: var(--text); }
-.page-nav button.active {
+.date-mode button:hover { border-color: var(--accent); color: var(--text); }
+.date-mode button.active {
   color: var(--accent);
   border-color: var(--accent);
   background: #1c2432;
@@ -165,6 +190,18 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 }
 .resolved.warn { color: var(--warn); }
 .resolved.empty { color: var(--muted); font-family: inherit; font-size: 0.95rem; }
+/* under the takeoff inputs rather than above the table */
+.inputs-row + .resolved { margin: 12px 0 0; }
+
+/* Takeoff in Zulu and local, one line each, the times under each other */
+.takeoff-summary {
+  display: grid; grid-template-columns: auto auto auto 1fr; column-gap: 0.7ch;
+  margin-top: 12px;
+  font-family: var(--mono); font-size: 1.05rem; color: var(--bright);
+}
+.takeoff-summary .ts-date { text-align: right; white-space: nowrap; }
+.takeoff-summary .ts-at { color: var(--muted); }
+.takeoff-summary .ts-zone { font-family: inherit; }
 
 .zone-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .zone-row button { flex-shrink: 0; }
@@ -526,12 +563,14 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .sz-lock { color: var(--muted); font-size: 0.75rem; flex-shrink: 0; }
 
-footer {
-  max-width: 780px; margin: 0 auto; padding: 16px;
-  color: var(--muted); font-size: 0.8rem; text-align: center;
-}
-footer a { color: var(--muted); }
-#zone-stamp.warn { color: var(--warn); }
+/* ---- about page ---- */
+.about-line { margin: 0; color: var(--bright); }
+.about-line.warn { color: var(--warn); }
+.about-check { align-items: center; }
+.about-result { color: var(--bright); font-size: 0.9rem; }
+.about-result.warn { color: var(--warn); }
+.about-links { display: flex; gap: 20px; flex-wrap: wrap; }
+.about-links a { color: var(--accent); }
 
 /* tighter side margins on phones so the events table rarely needs to
    scroll sideways */
@@ -539,5 +578,4 @@ footer a { color: var(--muted); }
   main { padding-left: 6px; padding-right: 6px; }
   .card { padding-left: 10px; padding-right: 10px; }
   th, td { padding-left: 6px; padding-right: 6px; }
-  footer { padding-left: 10px; padding-right: 10px; }
 }
