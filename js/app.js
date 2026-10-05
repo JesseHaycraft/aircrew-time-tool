@@ -666,21 +666,55 @@ function zoneDisplayValue() {
   return `${state.zone} ${T.utcOffsetLabel(takeoffMs ?? Date.now(), state.zone)}`;
 }
 
-// The text Copy puts on the clipboard: every event that has a time.
-function currentCopyText() {
+// The lines offered for copying: a header naming the local zone, then
+// every event that has a time.
+function copyLines() {
   const events = timelineEvents().filter((ev) => ev.ms !== null);
-  return T.buildCopyText(takeoffMs, events, [state.zone], { zulu: state.showZulu });
+  return T.buildCopyLines(takeoffMs, events, [state.zone], { zulu: state.showZulu });
 }
 
-// Copy popup: the format options, with the text shown as it will be copied.
+// Lines unticked in the copy popup, by position. Every line is ticked
+// again each time the popup opens.
+const copyLeftOut = new Set();
+
+// The text Copy puts on the clipboard: the lines still ticked.
+function currentCopyText() {
+  return copyLines().filter((_, i) => !copyLeftOut.has(i)).join('\n');
+}
+
+// Copy popup: the format options, then each line as it will be copied
+// beside the checkbox that keeps it in.
 function renderCopyOptions() {
   copyZuluSwitch.setAttribute('aria-checked', String(state.showZulu));
   copyZuluState.textContent = state.showZulu ? 'Yes' : 'No';
-  copyPreview.textContent = takeoffMs === null ? '' : currentCopyText();
+  const lines = takeoffMs === null ? [] : copyLines();
+  copyPreview.replaceChildren(...lines.map((line, i) => {
+    const row = document.createElement('label');
+    row.className = 'copy-line';
+    const text = document.createElement('span');
+    text.className = 'copy-line-text';
+    text.textContent = line;
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = !copyLeftOut.has(i);
+    box.setAttribute('aria-label', `Include: ${line}`);
+    const sync = () => {
+      row.classList.toggle('left-out', !box.checked);
+      copyDoBtn.disabled = copyLeftOut.size >= lines.length;
+    };
+    box.addEventListener('change', () => {
+      if (box.checked) copyLeftOut.delete(i); else copyLeftOut.add(i);
+      sync();
+    });
+    sync();
+    row.append(text, box);
+    return row;
+  }));
 }
 
 function openCopy() {
   if (takeoffMs === null) return;
+  copyLeftOut.clear();
   renderCopyOptions();
   copyOverlay.hidden = false;
   document.body.classList.add('no-scroll');

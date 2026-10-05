@@ -35,6 +35,6 @@ test('copy text is the same on the device\'s rules', () => {
   assert.equal(text, [
     'Local: New York (EDT)',
     '2230L (THU)  0230Z (FRI)  Brief',
-    '0130L (FRI)  0530Z (FRI)  TAKEOFF',
+    '0130L (FRI)  0530Z (FRI)  Takeoff',
   ].join('\n'));
 });

@@ -532,13 +532,14 @@ export function zoneDisplayName(ms, zone) {
   return zoneAbbr(ms, zone) || zoneLabel(zone);
 }
 
-// Plain-text timeline for pasting into messaging apps. Times come first
-// on every line (five characters each, so columns hold in any font with
-// equal-width digits), local before Zulu as on the SOEs page, each with
-// its weekday; names trail. One short header names the local zone.
-// zulu:false leaves the Zulu column out. `events` are {name, ms}; the
-// header's zone abbreviation is the one in force at the takeoff.
-export function buildCopyText(takeoffMs, events, zones, { zulu = true } = {}) {
+// Plain-text timeline for pasting into messaging apps, one string per
+// line. Times come first on every line (five characters each, so columns
+// hold in any font with equal-width digits), local before Zulu as on the
+// SOEs page, each with its weekday; names trail. The first line is a
+// short header naming the local zone. zulu:false leaves the Zulu column
+// out. `events` are {name, ms}; the header's zone abbreviation is the one
+// in force at the takeoff.
+export function buildCopyLines(takeoffMs, events, zones, { zulu = true } = {}) {
   const sorted = [...events].sort((a, b) => a.ms - b.ms);
   const header = 'Local: ' + zones.map((zone) => {
     const label = zoneLabel(zone);
@@ -551,8 +552,12 @@ export function buildCopyText(takeoffMs, events, zones, { zulu = true } = {}) {
       ...zones.map((zone) => stamp(zonedParts(ev.ms, zone), 'L')),
       ...(zulu ? [stamp(zonedParts(ev.ms, 'UTC'), 'Z')] : []),
     ];
-    const name = ev.name === 'Takeoff' || ev.name === 'Landing' ? ev.name.toUpperCase() : ev.name;
-    return `${cols.join('  ')}  ${name}`;
+    return `${cols.join('  ')}  ${ev.name}`;
   });
-  return (zones.length ? [header, ...lines] : lines).join('\n');
+  return zones.length ? [header, ...lines] : lines;
+}
+
+// The same, as the one text that goes on the clipboard.
+export function buildCopyText(takeoffMs, events, zones, options) {
+  return buildCopyLines(takeoffMs, events, zones, options).join('\n');
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   isLeapYear, daysInYear, dayOfYearUtc, parseTimeHHMM, parseJulianDay,
   parseOffset, parseOffsetEntry, minutesToHMM, resolveJulianYear, makeUtcInstant,
-  zonedParts, isValidZone, buildCopyText,
+  zonedParts, isValidZone, buildCopyText, buildCopyLines,
   zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName, zoneWallToUtc,
   daySegments, formatCountdown, sunEvents, nightIntervals, parseDuration,
   formatDurationEntry, resolveEventTimes, eventDependsOn,
@@ -165,7 +165,7 @@ test('copy text: Zulu rollover shows the weekday', () => {
     { name: 'Brief', ms: takeoff - 240 * 60_000 },
     { name: 'Takeoff', ms: takeoff },
   ], []);
-  assert.equal(text, '2130Z (THU)  Brief\n0130Z (FRI)  TAKEOFF'); // no zone → no header
+  assert.equal(text, '2130Z (THU)  Brief\n0130Z (FRI)  Takeoff'); // no zone → no header
 });
 
 test('countdown formatting', () => {
@@ -244,7 +244,7 @@ test('copy text: header, times first (local, then Zulu) with weekday, names trai
   assert.equal(text, [
     'Local: New York (EDT)',
     '2230L (THU)  0230Z (FRI)  Brief',
-    '0130L (FRI)  0530Z (FRI)  TAKEOFF',
+    '0130L (FRI)  0530Z (FRI)  Takeoff',
   ].join('\n'));
 });
 
@@ -258,12 +258,12 @@ test('copy text: zones without a real abbreviation show their UTC offset', () =>
   assert.equal(text, [
     'Local: Dubai (UTC+4)',
     '1202L (WED)  0802Z (WED)  Stop drink',
-    '0002L (THU)  2002Z (WED)  TAKEOFF',
-    '0822L (THU)  0422Z (THU)  LANDING',
+    '0002L (THU)  2002Z (WED)  Takeoff',
+    '0822L (THU)  0422Z (THU)  Landing',
   ].join('\n'));
   // Guam has one
   assert.equal(buildCopyText(takeoff, [{ name: 'Takeoff', ms: takeoff }], ['Pacific/Guam']),
-    'Local: Guam (ChST)\n0602L (THU)  2002Z (WED)  TAKEOFF');
+    'Local: Guam (ChST)\n0602L (THU)  2002Z (WED)  Takeoff');
 });
 
 test('copy text without Zulu: local column only', () => {
@@ -272,7 +272,7 @@ test('copy text without Zulu: local column only', () => {
   assert.equal(buildCopyText(takeoff, events, ['America/New_York'], { zulu: false }), [
     'Local: New York (EDT)',
     '1930L (THU)  Brief',
-    '2030L (THU)  TAKEOFF',
+    '2030L (THU)  Takeoff',
   ].join('\n'));
 });
 
@@ -375,4 +375,24 @@ test('eventDependsOn follows the chain of sources', () => {
   assert.equal(eventDependsOn(looped, 'debrief', 'debrief'), false);
   // a loop elsewhere in the chain ends the search
   assert.equal(eventDependsOn(looped, 'brief', 'debrief'), false);
+});
+
+test('copy lines: the copied text one line at a time, so lines can be left out', () => {
+  const takeoff = makeUtcInstant(2026, 254, 5, 30);
+  const events = [
+    { name: 'Takeoff', ms: takeoff },
+    { name: 'Brief', ms: takeoff - 180 * 60_000 },
+  ];
+  const lines = buildCopyLines(takeoff, events, ['America/New_York']);
+  assert.deepEqual(lines, [
+    'Local: New York (EDT)',
+    '2230L (THU)  0230Z (FRI)  Brief',
+    '0130L (FRI)  0530Z (FRI)  Takeoff',
+  ]);
+  assert.equal(lines.join('\n'), buildCopyText(takeoff, events, ['America/New_York']));
+  assert.deepEqual(buildCopyLines(takeoff, events, ['America/New_York'], { zulu: false }), [
+    'Local: New York (EDT)',
+    '2230L (THU)  Brief',
+    '0130L (FRI)  Takeoff',
+  ]);
 });

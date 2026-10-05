@@ -394,12 +394,29 @@ button.danger:hover { border-color: var(--danger); }
 /* copy popup: its options (a sliding switch, amber when on), then the
    text exactly as it will be copied */
 .copy-opts { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
-.copy-preview {
-  margin: 0; padding: 10px;
-  background: #0f141c; border: 1px solid var(--border); border-radius: 8px;
-  font-family: var(--mono); font-size: 0.75rem; line-height: 1.6; color: var(--bright);
-  white-space: pre; overflow-x: auto;
+/* each line of the text beside the checkbox that keeps it in */
+.copy-inc-label {
+  text-align: right; padding-right: 2px; margin-bottom: 4px;
+  font-size: 0.75rem; color: var(--muted);
 }
+.copy-preview {
+  background: #0f141c; border: 1px solid var(--border); border-radius: 8px;
+  padding: 4px 10px;
+}
+.copy-line {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 0; cursor: pointer;
+}
+/* a line too long for the row is cut short with … so the box stays on it */
+.copy-line-text {
+  flex: 1; min-width: 0;
+  font-family: var(--mono); font-size: 0.75rem; color: var(--bright);
+  white-space: pre; overflow: hidden; text-overflow: ellipsis;
+}
+.copy-line input {
+  accent-color: var(--accent); width: 20px; height: 20px; margin: 0; padding: 0; flex-shrink: 0;
+}
+.copy-line.left-out .copy-line-text { color: var(--muted); text-decoration: line-through; }
 .copy-opt-label { color: var(--muted); font-size: 0.9rem; }
 .copy-opt-state { color: var(--bright); font-size: 0.9rem; min-width: 2.5ch; }
 .switch {
