@@ -61,22 +61,13 @@
   </section>
 
   <section class="card">
-    <h2>Landing (optional)</h2>
-    <div class="mode-toggle landing-mode" role="group" aria-label="Enter landing as">
-      <button id="mode-lzulu" type="button">Zulu</button>
-      <button id="mode-llocal" type="button">Local</button>
-      <button id="mode-ldur" type="button">Duration</button>
-    </div>
+    <h2>Flight duration (optional)</h2>
     <div class="inputs-row">
-      <div class="input-group">
-        <div id="landing-input-label" class="input-top">Landing time</div>
-        <input id="landing-input" inputmode="numeric" placeholder="1205" maxlength="5" autocomplete="off">
-      </div>
-      <div class="input-group">
-        <div id="landing-calc-label" class="input-top">&nbsp;</div>
-        <div id="landing-calc" class="landing-calc"></div>
+      <div class="input-group duration-group">
+        <input id="landing-input" inputmode="numeric" placeholder="08:35" maxlength="5" autocomplete="off" aria-label="Flight duration, hours and minutes">
       </div>
     </div>
+    <p id="landing-calc" class="resolved" hidden></p>
   </section>
 
   </div>
@@ -224,7 +215,7 @@
       <div class="tpl-takeoff-row">
         <label class="tpl-takeoff-text tpl-landing-text">
           <input type="checkbox" id="tpl-landing-include">
-          <span>Landing &mdash; when a landing time is set</span>
+          <span>Landing &mdash; when a flight duration is set</span>
         </label>
         <span id="tpl-landing-cd" class="tpl-takeoff-cd"></span>
         <span class="h-sp"></span>

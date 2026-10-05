@@ -355,21 +355,6 @@ export function zoneWallToUtc(zone, year, month1, day, hour, minute) {
   return guess;
 }
 
-// The first instant after `afterMs` at which the zone's clock reads
-// hour:minute — a landing time given without a date is the next time the
-// clock shows it after takeoff.
-export function nextWallTime(afterMs, zone, hour, minute) {
-  const d = new Date(afterMs);
-  let best = null;
-  // the zone's date can be a day either side of the UTC date
-  for (let add = -1; add <= 2; add++) {
-    const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + add));
-    const ms = zoneWallToUtc(zone, day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate(), hour, minute);
-    if (ms > afterMs && (best === null || ms < best)) best = ms;
-  }
-  return best;
-}
-
 // Local-day segments (midnight to midnight in the zone's wall clock, so
 // 23/25 h around DST changes) covering [fromMs, toMs]. Labels are taken
 // at midday, safely inside the day.

@@ -109,9 +109,6 @@ function loadState() {
     // a Julian day is a Zulu day, so local time goes only with a calendar date
     timeMode: s.timeMode === 'local' && s.dateMode === 'calendar' ? 'local' : 'zulu',
     showZulu: s.showZulu !== undefined ? s.showZulu !== false : s.copyZulu !== false,
-    landingMode: ['local', 'duration'].includes(s.landingMode) ? s.landingMode : 'zulu',
-    landingZulu: typeof s.landingZulu === 'string' ? s.landingZulu : '',
-    landingLocal: typeof s.landingLocal === 'string' ? s.landingLocal : '',
     landingDuration: typeof s.landingDuration === 'string' ? s.landingDuration : '',
     calDate: typeof s.calDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.calDate)
       ? s.calDate
@@ -161,13 +158,8 @@ const modeJulianBtn = $('mode-julian');
 const modeCalBtn = $('mode-cal');
 const modeZuluBtn = $('mode-zulu');
 const modeLocalBtn = $('mode-local');
-const modeLZuluBtn = $('mode-lzulu');
-const modeLLocalBtn = $('mode-llocal');
-const modeLDurBtn = $('mode-ldur');
 const landingInput = $('landing-input');
-const landingInputLabel = $('landing-input-label');
 const landingCalc = $('landing-calc');
-const landingCalcLabel = $('landing-calc-label');
 const timeInput = $('ztime');
 const dateLabel = $('date-label');
 const timeLabel = $('time-label');
@@ -636,58 +628,29 @@ function computeAll() {
   renderTimeline();
 }
 
-// Landing card: a landing time, Zulu or local (the next time that clock
-// shows it after the takeoff), or a flight duration; a time shows the
-// duration it works out to, and a duration shows the Zulu landing time.
-const LANDING_ENTRY = { zulu: 'landingZulu', local: 'landingLocal', duration: 'landingDuration' };
+// Flight duration card: the landing it works out to, in Zulu and local.
 function computeLanding() {
   landingMs = null;
-  let label = '';
-  let calc = '';
-  let flag = '';
-  let muted = false;
-  const mode = state.landingMode;
-  const raw = state[LANDING_ENTRY[mode]];
-  const parsed = mode === 'duration' ? T.parseDuration(raw) : T.parseTimeHHMM(raw);
+  const raw = state.landingDuration;
+  const parsed = T.parseDuration(raw);
   landingInput.classList.toggle('invalid', raw.trim() !== '' && parsed === null);
+  let text = '';
   if (parsed !== null && takeoffMs === null) {
-    calc = 'Needs a takeoff time';
-    muted = true;
+    text = 'Needs a takeoff time';
   } else if (parsed !== null) {
-    // the day is flagged on the clock the entry was made in
-    const zone = mode === 'local' ? state.zone : 'UTC';
-    if (mode === 'duration') {
-      landingMs = takeoffMs + parsed * 60_000;
-      label = 'Lands';
-      calc = `${T.zonedParts(landingMs, 'UTC').hhmm}Z`;
-    } else {
-      landingMs = T.nextWallTime(takeoffMs, zone, parsed.h, parsed.m);
-      label = 'Duration';
-      // HH:MM, the way a typed duration is shown
-      const mins = Math.round((landingMs - takeoffMs) / 60_000);
-      calc = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
-    }
-    const lp = T.zonedParts(landingMs, zone);
-    if (lp.dateKey !== T.zonedParts(takeoffMs, zone).dateKey) {
-      flag = `(${lp.weekday} ${Number(lp.day)})`;
-    }
+    landingMs = takeoffMs + parsed * 60_000;
+    const zones = ['UTC', state.zone];
+    const [lz, ll] = zones.map((zone) => T.zonedParts(landingMs, zone));
+    const [tz, tl] = zones.map((zone) => T.zonedParts(takeoffMs, zone));
+    // as in the event table, the day goes on both times or on neither
+    const flagged = lz.dateKey !== tz.dateKey || ll.dateKey !== tl.dateKey;
+    const day = (p) => (flagged ? ` (${p.weekday} ${Number(p.day)})` : '');
+    text = `Lands ${lz.hhmm}Z${day(lz)} / ${ll.hhmm}L${day(ll)}`;
   }
-  landingCalcLabel.textContent = label || '\u00a0';
-  landingCalc.replaceChildren(calc);
-  if (flag) {
-    const f = document.createElement('span');
-    f.className = 'day-flag';
-    f.textContent = flag;
-    landingCalc.append(' ', f);
-  }
-  landingCalc.classList.toggle('muted', muted);
+  landingCalc.hidden = text === '';
+  landingCalc.textContent = text;
+  landingCalc.classList.toggle('empty', landingMs === null);
   if (document.activeElement !== landingInput) landingInput.value = raw;
-  landingInput.placeholder = mode === 'duration' ? '08:35' : '1205';
-  landingInputLabel.textContent = mode === 'duration' ? 'Flight duration'
-    : mode === 'local' ? 'Landing time, local' : 'Landing time, Zulu';
-  modeLZuluBtn.classList.toggle('active', mode === 'zulu');
-  modeLLocalBtn.classList.toggle('active', mode === 'local');
-  modeLDurBtn.classList.toggle('active', mode === 'duration');
 }
 
 // Shrink the zone field's font until the full value fits — a truncated
@@ -1222,22 +1185,10 @@ function init() {
   modeZuluBtn.addEventListener('click', () => setTimeMode('zulu'));
   modeLocalBtn.addEventListener('click', () => setTimeMode('local'));
 
-  const setLandingMode = (mode) => {
-    state.landingMode = mode;
-    // each mode keeps its own entry; show it even if the box has focus
-    landingInput.value = state[LANDING_ENTRY[mode]];
-    saveState();
-    computeAll();
-  };
-  modeLZuluBtn.addEventListener('click', () => setLandingMode('zulu'));
-  modeLLocalBtn.addEventListener('click', () => setLandingMode('local'));
-  modeLDurBtn.addEventListener('click', () => setLandingMode('duration'));
   // a duration gets its colon as it is typed, and is padded to HH:MM on leaving the box
   const setLandingEntry = (done) => {
-    if (state.landingMode === 'duration') {
-      landingInput.value = T.formatDurationEntry(landingInput.value, done);
-    }
-    state[LANDING_ENTRY[state.landingMode]] = landingInput.value;
+    landingInput.value = T.formatDurationEntry(landingInput.value, done);
+    state.landingDuration = landingInput.value;
     saveState();
     computeAll();
   };
