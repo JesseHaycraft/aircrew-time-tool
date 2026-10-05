@@ -1,13 +1,15 @@
 // Builds data/tzdata.json from an IANA tz release.
 //
-//   node tools/tzdata/build.mjs [version]      version: e.g. 2026e (default: latest)
+//   node tools/tzdata/build.mjs [version] [output file]
+//     version      an IANA release such as 2026e (default: latest)
+//     output file  default: data/tzdata.json
 //
 // Stage 1 (build-dump.sh) needs a POSIX system with cc, make, curl and gpg.
 // On Linux it runs directly; elsewhere it runs in a Docker container.
 // Stage 2 (convert.mjs) turns its text output into the JSON file.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDump, parseSources, buildData, stringifyData } from './convert.mjs';
 
@@ -46,7 +48,7 @@ const data = buildData({
   untilYear,
 });
 
-const outFile = join(root, 'data', 'tzdata.json');
+const outFile = process.argv[3] ? resolve(process.argv[3]) : join(root, 'data', 'tzdata.json');
 mkdirSync(dirname(outFile), { recursive: true });
 const text = stringifyData(data);
 writeFileSync(outFile, text);

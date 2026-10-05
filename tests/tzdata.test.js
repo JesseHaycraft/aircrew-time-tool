@@ -5,6 +5,7 @@ import {
   setZoneData, zoneDataInfo, usesDeviceData, zonedParts, utcOffsetLabel, zoneWallToUtc,
   zoneAbbr, zoneDisplayName, daySegments, buildCopyText,
 } from '../js/time-engine.js';
+import { compareWithRuntime, covers } from '../tools/tzdata/reference.mjs';
 
 const readJson = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 const data = readJson('../data/tzdata.json');
@@ -152,32 +153,6 @@ test('a damaged data file is refused and the good one stays in place', () => {
 // differs where the rules have changed since; those differences are
 // listed, with their release notes, in reference-differences.json.
 
-const formatters = new Map();
-function runtimeOffset(sec, zone) {
-  let f = formatters.get(zone);
-  if (!f) {
-    f = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-    });
-    formatters.set(zone, f);
-  }
-  const p = {};
-  for (const part of f.formatToParts(sec * 1000)) p[part.type] = part.value;
-  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) / 1000 - sec;
-}
-
-function dataOffset(sec, z) {
-  let lo = 0;
-  let hi = z.at.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (z.at[mid] <= sec) lo = mid + 1;
-    else hi = mid;
-  }
-  return z.types[lo === 0 ? z.start : z.to[lo - 1]][0];
-}
-
 test('every zone matches the runtime\'s own rules, except where release notes say otherwise', (t) => {
   const runtimeTz = process.versions.tz;
   const known = readJson('./reference-differences.json');
@@ -188,38 +163,15 @@ test('every zone matches the runtime\'s own rules, except where release notes sa
     t.skip(`no expected-differences list for a runtime on tz ${runtimeTz} (data is ${data.version})`);
     return;
   }
-  const day = (s) => Date.parse(`${s}T00:00:00Z`) / 1000;
-  const isAllowed = (zone, sec) => allowed.some((a) =>
-    a.zone === zone && sec >= day(a.from) && (a.until === null || sec < day(a.until)));
-
-  const WEEK = 7 * 86_400;
-  const unexplained = [];
+  const { compared, differences } = compareWithRuntime(data);
   const used = new Set();
-  let compared = 0;
-  const compare = (name, rulesZone, z, sec) => {
-    if (sec < data.from || sec >= data.until) return;
-    compared++;
-    const ours = dataOffset(sec, z);
-    const theirs = runtimeOffset(sec, name);
-    if (ours === theirs) return;
-    if (isAllowed(rulesZone, sec)) { used.add(rulesZone); return; }
-    if (unexplained.length < 20) {
-      unexplained.push(`${name} at ${new Date(sec * 1000).toISOString()}: data ${ours}, runtime ${theirs}`);
-    }
-  };
-  for (const [name, z] of Object.entries(data.zones)) {
-    try { runtimeOffset(0, name); } catch { continue; }   // zone the runtime doesn't know
-    // a weekly grid, plus a minute either side of every transition
-    for (let sec = data.from + 3 * 3600 + 17 * 60; sec < data.until; sec += WEEK) compare(name, name, z, sec);
-    for (const at of z.at) { compare(name, name, z, at - 60); compare(name, name, z, at + 60); }
+  const unexplained = [];
+  for (const d of differences) {
+    const entry = allowed.find((a) => covers(a, d.zone, d.sec));
+    if (entry) used.add(entry.zone);
+    else unexplained.push(`${d.name} at ${new Date(d.sec * 1000).toISOString()}: data ${d.ours}, runtime ${d.theirs}`);
   }
-  for (const [link, target] of Object.entries(data.links)) {
-    try { runtimeOffset(0, link); } catch { continue; }
-    for (let sec = data.from + 5 * 3600; sec < data.until; sec += 4 * WEEK) {
-      compare(link, target, data.zones[target], sec);
-    }
-  }
-  assert.deepEqual(unexplained, []);
+  assert.deepEqual(unexplained.slice(0, 20), []);
   assert.ok(compared > 1_000_000, `only ${compared} comparisons ran`);
   // every listed exception should still be needed
   assert.deepEqual(allowed.map((a) => a.zone).filter((zone) => !used.has(zone)), []);
