@@ -214,6 +214,9 @@ const timelineEl = $('timeline');
 const copyBtn = $('copy-btn');
 const copyZuluSwitch = $('copy-zulu');
 const copyZuluState = $('copy-zulu-state');
+const copyOverlay = $('copy-overlay');
+const copyPreview = $('copy-preview');
+const copyDoBtn = $('copy-do');
 const deviceBtn = $('zone-device-btn');
 const tplSelectBtn = $('tpl-select-btn');
 const tplSelectLabel = $('tpl-select-label');
@@ -663,17 +666,32 @@ function zoneDisplayValue() {
   return `${state.zone} ${T.utcOffsetLabel(takeoffMs ?? Date.now(), state.zone)}`;
 }
 
+// The text Copy puts on the clipboard: every event that has a time.
 function currentCopyText() {
-  // the copied text places each event by its distance from takeoff
-  const events = timelineEvents()
-    .filter((ev) => ev.ms !== null)
-    .map((ev) => ({ name: ev.name, offsetMin: Math.round((ev.ms - takeoffMs) / 60_000) }));
+  const events = timelineEvents().filter((ev) => ev.ms !== null);
   return T.buildCopyText(takeoffMs, events, [state.zone], { zulu: state.showZulu });
 }
 
+// Copy popup: the format options, with the text shown as it will be copied.
 function renderCopyOptions() {
   copyZuluSwitch.setAttribute('aria-checked', String(state.showZulu));
   copyZuluState.textContent = state.showZulu ? 'Yes' : 'No';
+  copyPreview.textContent = takeoffMs === null ? '' : currentCopyText();
+}
+
+function openCopy() {
+  if (takeoffMs === null) return;
+  renderCopyOptions();
+  copyOverlay.hidden = false;
+  document.body.classList.add('no-scroll');
+}
+
+let copyCloseTimer = null;
+function closeCopy() {
+  clearTimeout(copyCloseTimer);
+  copyOverlay.hidden = true;
+  copyDoBtn.textContent = 'Copy';
+  document.body.classList.remove('no-scroll');
 }
 
 function flash(btn, msg) {
@@ -1465,6 +1483,7 @@ function init() {
     if (e.key !== 'Escape') return;
     if (!tplSelectMenu.hidden) { hideTplMenu(); return; }
     if (!szOverlay.hidden) { closeSzEditor(); return; }
+    if (!copyOverlay.hidden) { closeCopy(); return; }
     if (tplOverlay.hidden) return;
     if (!tplEditorView.hidden) discardDraft();
     else closeManager();
@@ -1506,23 +1525,24 @@ function init() {
     renderTemplateEditor({ focusName: true });
   });
 
+  copyBtn.addEventListener('click', openCopy);
+  $('copy-close').addEventListener('click', closeCopy);
   copyZuluSwitch.addEventListener('click', () => {
     state.showZulu = !state.showZulu;
     saveState();
     renderCopyOptions();
-    renderTimeline();
   });
-  renderCopyOptions();
-
-  copyBtn.addEventListener('click', async () => {
-    if (takeoffMs === null) return;
+  copyDoBtn.addEventListener('click', async () => {
     const text = currentCopyText();
     try {
       await navigator.clipboard.writeText(text);
     } catch {
       fallbackCopy(text);
     }
-    flash(copyBtn, 'Copied ✓');
+    copyDoBtn.textContent = 'Copied ✓';
+    // long enough to read the tick, then back to the page
+    clearTimeout(copyCloseTimer);
+    copyCloseTimer = setTimeout(closeCopy, 900);
   });
 
   // page navigation, synced to the URL hash so the phone's back button

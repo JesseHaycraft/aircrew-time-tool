@@ -87,13 +87,6 @@
     </div>
     <p id="zone-note" class="resolved warn" hidden></p>
     <div id="timeline" class="soe-list" hidden></div>
-    <div class="copy-opts">
-      <span class="copy-opt-label">Zulu in copied text:</span>
-      <button id="copy-zulu" type="button" class="switch" role="switch" aria-checked="true" aria-label="Include Zulu times in the copied text">
-        <span class="switch-knob" aria-hidden="true"></span>
-      </button>
-      <span id="copy-zulu-state" class="copy-opt-state">Yes</span>
-    </div>
     <div class="actions">
       <button id="copy-btn" class="primary" type="button" disabled>Copy times</button>
     </div>
@@ -165,6 +158,26 @@
       <div id="sz-suggest" class="zone-suggest" hidden></div>
     </div>
     <p class="hint">Zulu is always shown.</p>
+  </div>
+</div>
+
+<div id="copy-overlay" class="overlay" hidden>
+  <div class="overlay-panel">
+    <div class="overlay-head">
+      <h2>Copy times</h2>
+      <button id="copy-close" type="button" class="ghost">Close</button>
+    </div>
+    <div class="copy-opts">
+      <span class="copy-opt-label">Show Zulu:</span>
+      <button id="copy-zulu" type="button" class="switch" role="switch" aria-checked="true" aria-label="Include Zulu times in the copied text">
+        <span class="switch-knob" aria-hidden="true"></span>
+      </button>
+      <span id="copy-zulu-state" class="copy-opt-state">Yes</span>
+    </div>
+    <pre id="copy-preview" class="copy-preview"></pre>
+    <div class="actions">
+      <button id="copy-do" class="primary" type="button">Copy</button>
+    </div>
   </div>
 </div>
 

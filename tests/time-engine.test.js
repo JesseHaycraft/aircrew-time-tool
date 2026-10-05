@@ -162,8 +162,8 @@ test('zone names and UTC offsets', () => {
 test('copy text: Zulu rollover shows the weekday', () => {
   const takeoff = makeUtcInstant(2026, 254, 1, 30);
   const text = buildCopyText(takeoff, [
-    { name: 'Brief', offsetMin: -240 },
-    { name: 'Takeoff', offsetMin: 0 },
+    { name: 'Brief', ms: takeoff - 240 * 60_000 },
+    { name: 'Takeoff', ms: takeoff },
   ], []);
   assert.equal(text, '2130Z (THU)  Brief\n0130Z (FRI)  TAKEOFF'); // no zone → no header
 });
@@ -235,40 +235,40 @@ test('duration parsing', () => {
   assert.equal(parseDuration('abc'), null);
 });
 
-test('copy text: header, times first with weekday, names trail', () => {
+test('copy text: header, times first (local, then Zulu) with weekday, names trail', () => {
   const takeoff = makeUtcInstant(2026, 254, 5, 30); // FRI 11 SEP 2026 0530Z
   const text = buildCopyText(takeoff, [
-    { name: 'Takeoff', offsetMin: 0 },
-    { name: 'Brief', offsetMin: -180 },
+    { name: 'Takeoff', ms: takeoff },
+    { name: 'Brief', ms: takeoff - 180 * 60_000 },
   ], ['America/New_York']);
   assert.equal(text, [
     'Local: New York (EDT)',
-    '0230Z (FRI)  2230L (THU)  Brief',
-    '0530Z (FRI)  0130L (FRI)  TAKEOFF',
+    '2230L (THU)  0230Z (FRI)  Brief',
+    '0130L (FRI)  0530Z (FRI)  TAKEOFF',
   ].join('\n'));
 });
 
 test('copy text: zones without a real abbreviation show their UTC offset', () => {
   const takeoff = makeUtcInstant(2026, 252, 20, 2); // WED 09 SEP 2026 2002Z
   const text = buildCopyText(takeoff, [
-    { name: 'Takeoff', offsetMin: 0 },
-    { name: 'Stop drink', offsetMin: -720 },
-    { name: 'Landing', offsetMin: 500 },
+    { name: 'Takeoff', ms: takeoff },
+    { name: 'Stop drink', ms: takeoff - 720 * 60_000 },
+    { name: 'Landing', ms: takeoff + 500 * 60_000 },
   ], ['Asia/Dubai']);
   assert.equal(text, [
     'Local: Dubai (UTC+4)',
-    '0802Z (WED)  1202L (WED)  Stop drink',
-    '2002Z (WED)  0002L (THU)  TAKEOFF',
-    '0422Z (THU)  0822L (THU)  LANDING',
+    '1202L (WED)  0802Z (WED)  Stop drink',
+    '0002L (THU)  2002Z (WED)  TAKEOFF',
+    '0822L (THU)  0422Z (THU)  LANDING',
   ].join('\n'));
   // Guam has one
-  assert.equal(buildCopyText(takeoff, [{ name: 'Takeoff', offsetMin: 0 }], ['Pacific/Guam']),
-    'Local: Guam (ChST)\n2002Z (WED)  0602L (THU)  TAKEOFF');
+  assert.equal(buildCopyText(takeoff, [{ name: 'Takeoff', ms: takeoff }], ['Pacific/Guam']),
+    'Local: Guam (ChST)\n0602L (THU)  2002Z (WED)  TAKEOFF');
 });
 
 test('copy text without Zulu: local column only', () => {
   const takeoff = makeUtcInstant(2026, 254, 0, 30); // 0030Z FRI; New York THU evening
-  const events = [{ name: 'Takeoff', offsetMin: 0 }, { name: 'Brief', offsetMin: -60 }];
+  const events = [{ name: 'Takeoff', ms: takeoff }, { name: 'Brief', ms: takeoff - 60 * 60_000 }];
   assert.equal(buildCopyText(takeoff, events, ['America/New_York'], { zulu: false }), [
     'Local: New York (EDT)',
     '1930L (THU)  Brief',

@@ -118,8 +118,8 @@ test('short zone names are the tz database\'s own, whatever the device calls the
   assert.equal(zoneDisplayName(jan, 'Europe/London'), 'GMT');
 
   const dec = Date.UTC(2026, 11, 15, 20, 0);
-  const text = buildCopyText(dec, [{ name: 'Takeoff', offsetMin: 0 }], ['America/Winnipeg']);
-  assert.equal(text, 'Local: Winnipeg (EST)\n2000Z (TUE)  1500L (TUE)  TAKEOFF');
+  const text = buildCopyText(dec, [{ name: 'Takeoff', ms: dec }], ['America/Winnipeg']);
+  assert.equal(text, 'Local: Winnipeg (EST)\n1500L (TUE)  2000Z (TUE)  TAKEOFF');
 });
 
 test('a damaged data file is refused and the good one stays in place', () => {

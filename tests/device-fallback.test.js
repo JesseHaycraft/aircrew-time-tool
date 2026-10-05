@@ -29,12 +29,12 @@ test('without the data file everything still converts, on the device\'s rules', 
 test('copy text is the same on the device\'s rules', () => {
   const takeoff = makeUtcInstant(2026, 254, 5, 30);
   const text = buildCopyText(takeoff, [
-    { name: 'Takeoff', offsetMin: 0 },
-    { name: 'Brief', offsetMin: -180 },
+    { name: 'Takeoff', ms: takeoff },
+    { name: 'Brief', ms: takeoff - 180 * 60_000 },
   ], ['America/New_York']);
   assert.equal(text, [
     'Local: New York (EDT)',
-    '0230Z (FRI)  2230L (THU)  Brief',
-    '0530Z (FRI)  0130L (FRI)  TAKEOFF',
+    '2230L (THU)  0230Z (FRI)  Brief',
+    '0130L (FRI)  0530Z (FRI)  TAKEOFF',
   ].join('\n'));
 });

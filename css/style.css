@@ -391,8 +391,15 @@ button.danger:hover { border-color: var(--danger); }
 /* live "time until", beside the name of the event it belongs to */
 .soe-countdown { font-size: 0.85rem; font-weight: 400; color: var(--accent); white-space: nowrap; }
 
-/* copy options: a sliding switch, amber when on */
-.copy-opts { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+/* copy popup: its options (a sliding switch, amber when on), then the
+   text exactly as it will be copied */
+.copy-opts { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+.copy-preview {
+  margin: 0; padding: 10px;
+  background: #0f141c; border: 1px solid var(--border); border-radius: 8px;
+  font-family: var(--mono); font-size: 0.75rem; line-height: 1.6; color: var(--bright);
+  white-space: pre; overflow-x: auto;
+}
 .copy-opt-label { color: var(--muted); font-size: 0.9rem; }
 .copy-opt-state { color: var(--bright); font-size: 0.9rem; min-width: 2.5ch; }
 .switch {
