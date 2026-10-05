@@ -531,6 +531,7 @@ footer {
   color: var(--muted); font-size: 0.8rem; text-align: center;
 }
 footer a { color: var(--muted); }
+#zone-stamp.warn { color: var(--warn); }
 
 /* tighter side margins on phones so the events table rarely needs to
    scroll sideways */

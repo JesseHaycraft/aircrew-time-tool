@@ -150,6 +150,7 @@ const landingCalcLabel = $('landing-calc-label');
 const timeInput = $('ztime');
 const resolvedEl = $('resolved');
 const zoneNote = $('zone-note');
+const zoneStamp = $('zone-stamp');
 const clockEl = $('clock');
 const zoneInput = $('zone-input');
 const suggestEl = $('zone-suggest');
@@ -397,6 +398,18 @@ function renderZoneNote(instants) {
   }
   zoneNote.hidden = text === '';
   zoneNote.textContent = text;
+}
+
+// Footer stamp: which release of the time zone rules the app is running
+// on, the way a chart carries its edition.
+function renderZoneStamp() {
+  const info = T.zoneDataInfo();
+  zoneStamp.textContent = info ? `Zone data ${info.version}` : 'Zone data not loaded';
+  zoneStamp.title = info
+    ? `Time zone rules from IANA release ${info.version}, built ${info.built}. `
+      + `Covers ${new Date(info.fromMs).getUTCFullYear()}–${new Date(info.untilMs - 1).getUTCFullYear()}.`
+    : 'Using this device’s own time zone rules, which may be out of date.';
+  zoneStamp.classList.toggle('warn', !info);
 }
 
 function renderTimeline() {
@@ -1097,6 +1110,7 @@ function applyPage(page) {
 
 function init() {
   $('version').textContent = VERSION;
+  renderZoneStamp();
   doyInput.value = state.doy;
   calInput.value = state.calDate;
   timeInput.value = state.time;
@@ -1277,6 +1291,7 @@ function start() {
 }
 loadZoneData().then((loaded) => {
   if (started && loaded) {
+    renderZoneStamp();
     computeAll();
     if (state.page === 'slider') slider.open();
   }
