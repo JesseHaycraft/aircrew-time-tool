@@ -129,6 +129,8 @@ export function initSlider({
       row.subEl.textContent = [
         abbr !== 'UTC' ? abbr : null,
         T.utcOffsetLabel(sliderT, row.zone),
+        // times from the device's own rules rather than the app's zone data
+        T.usesDeviceData(sliderT, row.zone) ? '· device rules' : null,
       ].filter(Boolean).join(' ');
 
       // The day under the cursor keeps its label snug against the line on

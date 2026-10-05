@@ -108,6 +108,119 @@ export function makeUtcInstant(year, doy, h, m) {
   return Date.UTC(year, 0, doy, h, m); // day-of-month overflow normalizes doy
 }
 
+// ---- bundled zone rules ----
+// The app carries its own copy of the IANA time zone rules
+// (data/tzdata.json, built by tools/tzdata) and converts with that, so a
+// device whose own rules are out of date still gets the right answer.
+// The device is asked only for a zone or instant the file doesn't cover,
+// and for display names.
+
+let zoneData = null;
+let zoneRules = null;   // zone id (links included) → that zone's rules
+
+// Why a parsed data file can't be used, or null when it is sound.
+function zoneDataProblem(data) {
+  const isInt = Number.isInteger;
+  if (!data || data.format !== 1) return 'unknown format';
+  if (typeof data.version !== 'string' || !/^\d{4}[a-z]+$/.test(data.version)) return 'bad version';
+  if (!isInt(data.from) || !isInt(data.until) || data.from >= data.until) return 'bad range';
+  if (!data.zones || typeof data.zones !== 'object' || !data.links || typeof data.links !== 'object') {
+    return 'missing zones or links';
+  }
+  for (const [name, z] of Object.entries(data.zones)) {
+    if (!z || !Array.isArray(z.types) || !z.types.length || !Array.isArray(z.at) || !Array.isArray(z.to)) {
+      return `${name}: malformed`;
+    }
+    for (const t of z.types) {
+      if (!Array.isArray(t) || !isInt(t[0]) || Math.abs(t[0]) > 64_800 || typeof t[1] !== 'string') {
+        return `${name}: bad type`;
+      }
+    }
+    const typeOk = (i) => isInt(i) && i >= 0 && i < z.types.length;
+    if (!typeOk(z.start) || z.at.length !== z.to.length) return `${name}: bad shape`;
+    for (let i = 0; i < z.at.length; i++) {
+      if (!isInt(z.at[i]) || z.at[i] < data.from || z.at[i] >= data.until) return `${name}: transition out of range`;
+      if (i > 0 && z.at[i] <= z.at[i - 1]) return `${name}: transitions out of order`;
+      if (!typeOk(z.to[i])) return `${name}: bad transition`;
+    }
+  }
+  for (const [link, target] of Object.entries(data.links)) {
+    if (!Object.hasOwn(data.zones, target)) return `link ${link}: unknown target`;
+  }
+  return null;
+}
+
+// Answers that can never change; a file that gets them wrong is not used.
+const KNOWN_OFFSETS = [
+  ['Etc/UTC', Date.UTC(2021, 0, 15), 0],
+  ['America/New_York', Date.UTC(2021, 0, 15), -18_000],
+  ['America/New_York', Date.UTC(2021, 6, 15), -14_400],
+  ['Asia/Kolkata', Date.UTC(2021, 0, 15), 19_800],
+];
+
+// Install a parsed data/tzdata.json. Returns false, leaving any earlier
+// data in place, when the file is malformed or fails the known answers.
+export function setZoneData(data) {
+  if (zoneDataProblem(data) !== null) return false;
+  const rules = new Map(Object.entries(data.zones));
+  for (const [link, target] of Object.entries(data.links)) rules.set(link, data.zones[target]);
+  const previous = [zoneData, zoneRules];
+  [zoneData, zoneRules] = [data, rules];
+  if (KNOWN_OFFSETS.some(([zone, ms, sec]) => ruleAt(ms, zone)?.[0] !== sec)) {
+    [zoneData, zoneRules] = previous;
+    return false;
+  }
+  return true;
+}
+
+// Version and coverage of the installed data, or null when none is.
+export function zoneDataInfo() {
+  return zoneData && {
+    version: zoneData.version,
+    built: zoneData.built,
+    fromMs: zoneData.from * 1000,
+    untilMs: zoneData.until * 1000,
+  };
+}
+
+// The [offsetSeconds, abbreviation, isDst] in force in a zone at an
+// instant, or null when the bundled data doesn't cover that zone or time.
+function ruleAt(ms, zone) {
+  const z = zoneRules?.get(zone);
+  if (!z) return null;
+  const sec = Math.floor(ms / 1000);
+  if (sec < zoneData.from || sec >= zoneData.until) return null;
+  let lo = 0;                 // ends as the number of transitions at or before sec
+  let hi = z.at.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (z.at[mid] <= sec) lo = mid + 1;
+    else hi = mid;
+  }
+  return z.types[lo === 0 ? z.start : z.to[lo - 1]];
+}
+
+// True when a conversion for this zone and instant falls back to the
+// device's own rules (no data loaded, unknown zone, or outside the range).
+export function usesDeviceData(ms, zone) {
+  return ruleAt(ms, zone) === null;
+}
+
+const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const pad2 = (n) => String(n).padStart(2, '0');
+
+// "UTC-4", "UTC+5:30", "UTC+0" from seconds east of UTC.
+function offsetLabel(prefix, sec) {
+  const abs = Math.abs(sec);
+  const m = Math.floor((abs % 3600) / 60);
+  const s = abs % 60;
+  return `${prefix}${sec < 0 ? '-' : '+'}${Math.floor(abs / 3600)}`
+    + `${m || s ? `:${pad2(m)}` : ''}${s ? `:${pad2(s)}` : ''}`;
+}
+
+// ---- the device's own zone support (fallback and display names) ----
+
 const formatterCache = new Map();
 
 function formatterFor(zone, kind = 'parts') {
@@ -145,28 +258,74 @@ export function isValidZone(zone) {
   }
 }
 
-// Wall-clock parts of an absolute instant in a zone. Formatting an absolute
-// instant is always DST-safe: the offset in effect on the event's date is used.
-export function zonedParts(ms, zone) {
+function deviceZonedParts(ms, zone) {
   const parts = {};
   for (const p of formatterFor(zone).formatToParts(ms)) parts[p.type] = p.value;
+  const month = parts.month.toUpperCase();
   return {
     hhmm: `${parts.hour}${parts.minute}`,
     weekday: parts.weekday.toUpperCase(),
     day: parts.day,
-    month: parts.month.toUpperCase(),
+    month,
     year: parts.year,
     zoneAbbr: parts.timeZoneName.replace(/\s/g, ''),
-    dateKey: `${parts.year}-${parts.month}-${parts.day}`,
+    dateKey: `${parts.year}-${month}-${parts.day}`,
   };
 }
 
-function wallParts(ms, zone) {
+function deviceWallParts(ms, zone) {
   const parts = {};
   for (const p of formatterFor(zone, 'wall').formatToParts(ms)) parts[p.type] = p.value;
   return {
     year: Number(parts.year), month: Number(parts.month), day: Number(parts.day),
     hour: Number(parts.hour), minute: Number(parts.minute),
+  };
+}
+
+// Wall-clock parts of an absolute instant in a zone, using the offset in
+// effect at that instant, so always DST-correct for the event's date.
+export function zonedParts(ms, zone) {
+  const rule = ruleAt(ms, zone);
+  if (!rule) {
+    const { zoneAbbr: _, ...parts } = deviceZonedParts(ms, zone);
+    return parts;
+  }
+  const d = new Date(ms + rule[0] * 1000);
+  const day = pad2(d.getUTCDate());
+  const month = MONTHS[d.getUTCMonth()];
+  const year = String(d.getUTCFullYear());
+  return {
+    hhmm: `${pad2(d.getUTCHours())}${pad2(d.getUTCMinutes())}`,
+    weekday: WEEKDAYS[d.getUTCDay()],
+    day,
+    month,
+    year,
+    dateKey: `${year}-${month}-${day}`,
+  };
+}
+
+// Short zone name ("EDT") for an instant. The tz database has no English
+// names for most of the world, so this comes from the device — but only
+// when the device's clock for that instant agrees with ours. When it
+// doesn't (its rules are out of date), the plain offset ("GMT-6") stands
+// in, so a name is never shown beside a time it doesn't match.
+export function zoneAbbr(ms, zone) {
+  let device = null;
+  try { device = deviceZonedParts(ms, zone); } catch { /* zone unknown to this device */ }
+  const rule = ruleAt(ms, zone);
+  if (!rule) return device ? device.zoneAbbr : '';
+  const ours = zonedParts(ms, zone);
+  if (device && device.hhmm === ours.hhmm && device.dateKey === ours.dateKey) return device.zoneAbbr;
+  return offsetLabel('GMT', rule[0]);
+}
+
+function wallParts(ms, zone) {
+  const rule = ruleAt(ms, zone);
+  if (!rule) return deviceWallParts(ms, zone);
+  const d = new Date(ms + rule[0] * 1000);
+  return {
+    year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(),
+    hour: d.getUTCHours(), minute: d.getUTCMinutes(),
   };
 }
 
@@ -305,6 +464,8 @@ function timeZonePart(ms, zone, kind) {
 
 // "UTC-4", "UTC+5:30", "UTC+0" — as of the given instant, so DST-correct.
 export function utcOffsetLabel(ms, zone) {
+  const rule = ruleAt(ms, zone);
+  if (rule) return offsetLabel('UTC', rule[0]);
   const raw = timeZonePart(ms, zone, 'offset');
   return raw === 'GMT' ? 'UTC+0' : raw.replace('GMT', 'UTC');
 }
@@ -317,8 +478,8 @@ export function longZoneName(ms, zone) {
 // Short abbreviation when CLDR has one (EDT, CDT); city name when it
 // would only be a GMT offset (Pacific/Guam → "Guam").
 export function zoneDisplayName(ms, zone) {
-  const abbr = zonedParts(ms, zone).zoneAbbr;
-  return abbr.startsWith('GMT') || abbr.startsWith('UTC') ? zoneLabel(zone) : abbr;
+  const abbr = zoneAbbr(ms, zone);
+  return !abbr || abbr.startsWith('GMT') || abbr.startsWith('UTC') ? zoneLabel(zone) : abbr;
 }
 
 // Plain-text timeline for pasting into messaging apps. Times come first

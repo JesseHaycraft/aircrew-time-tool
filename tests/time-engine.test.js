@@ -6,7 +6,12 @@ import {
   zonedParts, isValidZone, buildCopyText,
   zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName, zoneWallToUtc,
   daySegments, formatCountdown, zoneRegionName, sunEvents, nightIntervals, parseDuration,
+  setZoneData,
 } from '../js/time-engine.js';
+import { readFileSync } from 'node:fs';
+
+// Everything below runs on the app's own zone rules, as the app does.
+assert.equal(setZoneData(JSON.parse(readFileSync(new URL('../data/tzdata.json', import.meta.url), 'utf8'))), true);
 
 test('leap years', () => {
   assert.equal(isLeapYear(2024), true);

@@ -38,6 +38,12 @@ TAKEOFF: 0530Z (FRI 11) / 0130 EDT (FRI 11)
 
 No build step. Clone the repo and open `index.html`, or serve the folder with any static server.
 
+Time zone rules come from `data/tzdata.json`, which is built from the IANA tz database. The app converts with that file rather than with the device's own rules, so an out-of-date phone or browser still shows the right time; the device is only used for a zone or date the file doesn't cover, and the page says so when that happens. To rebuild the file for a new IANA release (needs Docker, except on Linux):
+
+```sh
+npm run build:tzdata
+```
+
 All time math lives in `js/time-engine.js` (pure functions, no DOM). Run its tests with:
 
 ```sh

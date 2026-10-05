@@ -149,6 +149,7 @@ const landingCalc = $('landing-calc');
 const landingCalcLabel = $('landing-calc-label');
 const timeInput = $('ztime');
 const resolvedEl = $('resolved');
+const zoneNote = $('zone-note');
 const clockEl = $('clock');
 const zoneInput = $('zone-input');
 const suggestEl = $('zone-suggest');
@@ -208,7 +209,7 @@ function buildZoneEntry(id) {
   const names = new Set();
   for (const t of [Date.UTC(year, 0, 15), Date.UTC(year, 6, 15)]) {
     names.add(T.longZoneName(t, id));
-    const abbr = T.zonedParts(t, id).zoneAbbr;
+    const abbr = T.zoneAbbr(t, id);
     if (!abbr.startsWith('GMT')) names.add(abbr);
   }
   const display = [...names].filter(Boolean);
@@ -385,10 +386,25 @@ function showTplMenu() {
   tplSelectBtn.setAttribute('aria-expanded', 'true');
 }
 
+// Says so whenever the times on screen come from the device's own zone
+// rules instead of the app's: the data file didn't load, or the zone or
+// one of the instants isn't in it.
+function renderZoneNote(instants) {
+  let text = '';
+  if (T.zoneDataInfo() === null) {
+    text = 'Time zone data hasn’t loaded — using this device’s own rules, which may be out of date.';
+  } else if (instants.some((ms) => T.usesDeviceData(ms, state.zone) || T.usesDeviceData(ms, 'UTC'))) {
+    text = 'Not covered by the app’s time zone data — using this device’s own rules for these times.';
+  }
+  zoneNote.hidden = text === '';
+  zoneNote.textContent = text;
+}
+
 function renderTimeline() {
   copyBtn.disabled = takeoffMs === null;
   if (takeoffMs === null) {
     timelineTable.hidden = true;
+    renderZoneNote([]);
     tickClock();
     return;
   }
@@ -408,8 +424,9 @@ function renderTimeline() {
   // everything shares one day, no flags at all.
   const rows = timelineEvents().map((ev) => {
     const ms = takeoffMs + ev.offsetMin * 60_000;
-    return { ev, zp: T.zonedParts(ms, 'UTC'), lp: T.zonedParts(ms, state.zone) };
+    return { ev, ms, zp: T.zonedParts(ms, 'UTC'), lp: T.zonedParts(ms, state.zone) };
   });
+  renderZoneNote(rows.map((r) => r.ms));
   const dateKeys = new Set();
   for (const r of rows) {
     if (showZ) dateKeys.add(r.zp.dateKey);
@@ -1232,4 +1249,38 @@ function init() {
   applyPage(initialPage);
 }
 
-init();
+// The app converts with its own copy of the time zone rules. If the file
+// can't be fetched or fails its checks, the device's own rules are used
+// and the page says so (see renderZoneNote).
+async function loadZoneData() {
+  // a fresh copy when the site answers in time, otherwise the browser's saved one
+  for (const cache of ['no-cache', 'force-cache']) {
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 8000);
+    try {
+      const res = await fetch('data/tzdata.json', { cache, signal: abort.signal });
+      if (res.ok && T.setZoneData(await res.json())) return true;
+    } catch { /* offline, blocked or too slow */ } finally {
+      clearTimeout(timer);
+    }
+  }
+  return false;
+}
+
+// Start as soon as the zone data is in. A slow connection doesn't hold the
+// page up: after a moment it starts on the device's rules (flagged), then
+// redraws once the file arrives.
+let started = false;
+function start() {
+  if (started) return;
+  started = true;
+  init();
+}
+loadZoneData().then((loaded) => {
+  if (started && loaded) {
+    computeAll();
+    if (state.page === 'slider') slider.open();
+  }
+  start();
+});
+setTimeout(start, 3000);
