@@ -8,10 +8,11 @@ const VERSION = 'v0.7.0';
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
+// minutes from takeoff
 const DEFAULT_TEMPLATE_EVENTS = [
-  { name: 'Stop drink', offset: '-12:00' },
-  { name: 'LFA', offset: '-4:15' },
-  { name: 'Bus', offset: '-3:15' },
+  { name: 'Stop drink', offsetMin: -720 },
+  { name: 'LFA', offsetMin: -255 },
+  { name: 'Bus', offsetMin: -195 },
 ];
 
 const newId = () => (crypto.randomUUID
@@ -25,7 +26,7 @@ function makeDefaultTemplate() {
     takeoffCountdown: false,
     includeLanding: true,
     landingCountdown: false,
-    events: DEFAULT_TEMPLATE_EVENTS.map((e) => ({ ...e })),
+    events: DEFAULT_TEMPLATE_EVENTS.map((e) => ({ id: newId(), source: 'takeoff', countdown: false, ...e })),
   };
 }
 
@@ -55,6 +56,39 @@ let state = loadState();
 let takeoffMs = null;
 let landingMs = null;   // from the Landing card, only when a takeoff is set too
 
+// A template's events as the app keeps them: {id, name, source, offsetMin,
+// countdown}, where source is 'takeoff', 'landing' or another event's id
+// (see "sequence of events" in time-engine.js). Versions before sources
+// kept a signed text such as "-4:15", always counted from takeoff.
+function sanitizeEvents(raw) {
+  const events = [];
+  const ids = new Set();
+  for (const e of raw) {
+    if (!e || typeof e.name !== 'string') continue;
+    const offsetMin = Number.isInteger(e.offsetMin) ? e.offsetMin
+      : typeof e.offset === 'string' ? T.parseOffset(e.offset)
+      : null;
+    if (offsetMin === null) continue;
+    const id = typeof e.id === 'string' && e.id && !ids.has(e.id) ? e.id : newId();
+    ids.add(id);
+    events.push({
+      id,
+      name: e.name,
+      source: typeof e.source === 'string' ? e.source : 'takeoff',
+      offsetMin,
+      countdown: e.countdown === true,
+    });
+  }
+  // a source that isn't there, or that leads back to the event itself,
+  // falls back to takeoff
+  for (const e of events) {
+    const known = e.source === 'takeoff' || e.source === 'landing'
+      || (e.source !== e.id && ids.has(e.source));
+    if (!known || T.eventDependsOn(events, e.id, e.id)) e.source = 'takeoff';
+  }
+  return events;
+}
+
 function sanitizeTemplates(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
@@ -66,9 +100,7 @@ function sanitizeTemplates(raw) {
       takeoffCountdown: t.takeoffCountdown === true,
       includeLanding: t.includeLanding !== false,
       landingCountdown: t.landingCountdown === true,
-      events: t.events
-        .filter((e) => e && typeof e.name === 'string' && typeof e.offset === 'string')
-        .map((e) => ({ name: e.name, offset: e.offset, countdown: e.countdown === true })),
+      events: sanitizeEvents(t.events),
     });
   }
   return out;
@@ -130,26 +162,30 @@ function activeTemplate() {
     ?? null;
 }
 
-// Active template's valid events plus the always-included takeoff, sorted.
+// The SOEs page's rows: the active template's events plus the takeoff,
+// which is always there, and the landing when there is one. Each has its
+// instant (null while it can't be worked out) and, for a template event,
+// where that comes from: "Takeoff − 3:15", "Show + 16:00". In time order;
+// rows without a time go last, in template order. Needs a takeoff.
 function timelineEvents() {
   const tpl = activeTemplate();
-  const events = (tpl ? tpl.events : [])
-    .map((e) => ({
-      name: e.name.trim() || 'Event',
-      offsetMin: T.parseOffset(e.offset),
-      countdown: e.countdown === true,
-    }))
-    .filter((e) => e.offsetMin !== null);
-  events.push({ name: 'Takeoff', offsetMin: 0, countdown: tpl?.takeoffCountdown === true, fixed: true });
-  if (landingMs !== null && takeoffMs !== null && tpl?.includeLanding !== false) {
-    events.push({
-      name: 'Landing',
-      offsetMin: Math.round((landingMs - takeoffMs) / 60_000),
-      countdown: tpl?.landingCountdown === true,
-      fixed: true,
-    });
+  const events = tpl ? tpl.events : [];
+  const times = T.resolveEventTimes(events, takeoffMs, landingMs);
+  const nameOf = (e) => e.name.trim() || 'Event';
+  const sourceName = (source) => (source === 'takeoff' ? 'Takeoff'
+    : source === 'landing' ? 'Landing'
+    : nameOf(events.find((e) => e.id === source)));
+  const rows = events.map((e) => ({
+    name: nameOf(e),
+    ms: times.get(e.id),
+    from: `${sourceName(e.source)} ${e.offsetMin < 0 ? '\u2212' : '+'} ${T.minutesToHMM(e.offsetMin)}`,
+    countdown: e.countdown === true,
+  }));
+  rows.push({ name: 'Takeoff', ms: takeoffMs, countdown: tpl?.takeoffCountdown === true });
+  if (landingMs !== null && tpl?.includeLanding !== false) {
+    rows.push({ name: 'Landing', ms: landingMs, countdown: tpl?.landingCountdown === true });
   }
-  return events.sort((a, b) => a.offsetMin - b.offsetMin);
+  return rows.sort((a, b) => (a.ms === null) - (b.ms === null) || (a.ms ?? 0) - (b.ms ?? 0));
 }
 
 const $ = (id) => document.getElementById(id);
@@ -478,13 +514,6 @@ function renderSoeTakeoff() {
   });
 }
 
-// Where an event's time comes from: "Takeoff − 3:15", "Takeoff + 0:45".
-function offsetText(ev) {
-  const abs = Math.abs(ev.offsetMin);
-  const sign = ev.offsetMin < 0 ? '\u2212' : '+';
-  return `Takeoff ${sign} ${Math.floor(abs / 60)}:${String(abs % 60).padStart(2, '0')}`;
-}
-
 function renderTimeline() {
   copyBtn.disabled = takeoffMs === null;
   soeEmpty.hidden = takeoffMs !== null;
@@ -497,32 +526,38 @@ function renderTimeline() {
     return;
   }
 
-  const rows = timelineEvents().map((ev) => {
-    const ms = takeoffMs + ev.offsetMin * 60_000;
-    return { ev, ms, zp: T.zonedParts(ms, 'UTC'), lp: T.zonedParts(ms, state.zone) };
-  });
-  renderZoneNote(rows.map((r) => r.ms));
+  const rows = timelineEvents().map((ev) => (ev.ms === null ? { ev } : {
+    ev, zp: T.zonedParts(ev.ms, 'UTC'), lp: T.zonedParts(ev.ms, state.zone),
+  }));
+  const timed = rows.filter((r) => r.ev.ms !== null);
+  renderZoneNote(timed.map((r) => r.ev.ms));
   // All-or-nothing day labels: if more than one calendar day appears in
   // the sequence (in either column), every time states its day; when
   // everything shares one day, none do.
-  const showDays = new Set(rows.flatMap((r) => [r.zp.dateKey, r.lp.dateKey])).size > 1;
+  const showDays = new Set(timed.flatMap((r) => [r.zp.dateKey, r.lp.dateKey])).size > 1;
   const dayText = (p) => `${p.weekday} ${Number(p.day)}`;
 
-  for (const { ev, ms, zp, lp } of rows) {
+  for (const { ev, zp, lp } of rows) {
     const left = el('soe-left');
     left.append(el('soe-name', ev.name));
     // takeoff and landing come from the Frag page, not from an offset
-    if (!ev.fixed) left.append(el('soe-off', offsetText(ev)));
-    const times = el('soe-times');
-    times.append(el('soe-time', `${lp.hhmm}L`), el('soe-sep', '/'), el('soe-time', `${zp.hhmm}Z`));
-    if (showDays) times.append(el('soe-day', dayText(lp)), el('soe-sep'), el('soe-day', dayText(zp)));
+    if (ev.from) left.append(el('soe-off', ev.from));
     const main = el('soe-main');
-    main.append(left, times);
     const row = el('soe-row');
+    if (ev.ms === null) {
+      // only a missing landing leaves a time open
+      row.classList.add('pending');
+      main.append(left, el('soe-needs', 'Needs flight duration'));
+    } else {
+      const times = el('soe-times');
+      times.append(el('soe-time', `${lp.hhmm}L`), el('soe-sep', '/'), el('soe-time', `${zp.hhmm}Z`));
+      if (showDays) times.append(el('soe-day', dayText(lp)), el('soe-sep'), el('soe-day', dayText(zp)));
+      main.append(left, times);
+    }
     row.append(main);
-    if (ev.countdown) {
+    if (ev.countdown && ev.ms !== null) {
       const cd = el('soe-countdown');
-      cd.dataset.target = String(ms);
+      cd.dataset.target = String(ev.ms);
       row.append(cd);
     }
     timelineEl.append(row);
@@ -645,7 +680,11 @@ function zoneDisplayValue() {
 }
 
 function currentCopyText() {
-  return T.buildCopyText(takeoffMs, timelineEvents(), [state.zone], { zulu: state.showZulu });
+  // the copied text places each event by its distance from takeoff
+  const events = timelineEvents()
+    .filter((ev) => ev.ms !== null)
+    .map((ev) => ({ name: ev.name, offsetMin: Math.round((ev.ms - takeoffMs) / 60_000) }));
+  return T.buildCopyText(takeoffMs, events, [state.zone], { zulu: state.showZulu });
 }
 
 function renderCopyOptions() {
@@ -727,8 +766,73 @@ function commitZone() {
 
 // ---- template manager ---------------------------------------------------
 
-function markOffsetValidity(input, value) {
-  input.classList.toggle('invalid', T.parseOffset(value) === null && value.trim() !== '');
+// The editor's copy of an event keeps the offset as typed, with before or
+// after chosen beside it, so a half-typed entry is not lost.
+function toDraftEvent(e) {
+  return {
+    id: e.id,
+    name: e.name,
+    source: e.source,
+    after: e.offsetMin > 0,
+    offsetText: T.minutesToHMM(e.offsetMin),
+    countdown: e.countdown === true,
+  };
+}
+
+// Signed minutes of a draft event; null while its offset can't be read.
+function draftOffsetMin(d) {
+  const size = T.parseOffsetEntry(d.offsetText);
+  if (size === null) return null;
+  return d.after ? size : -size || 0;
+}
+
+// Back to the saved form; null while the offset can't be read.
+function fromDraftEvent(d) {
+  const offsetMin = draftOffsetMin(d);
+  if (offsetMin === null) return null;
+  return { id: d.id, name: d.name, source: d.source, offsetMin, countdown: d.countdown === true };
+}
+
+// Take an event out of the draft. Events that counted from it now count
+// from what it counted from, with its offset added to theirs, so their
+// times stay where they were.
+function removeDraftEvent(gone) {
+  const goneMin = draftOffsetMin(gone) ?? 0;
+  for (const ev of draft.events) {
+    if (ev.source !== gone.id) continue;
+    ev.source = gone.source;
+    const own = draftOffsetMin(ev);
+    if (own === null) continue;
+    ev.after = own + goneMin > 0;
+    ev.offsetText = T.minutesToHMM(own + goneMin);
+  }
+  draft.events = draft.events.filter((ev) => ev !== gone);
+}
+
+// What an event may count from: takeoff, landing, and any other event
+// that doesn't itself depend on this one (which would make a loop).
+function sourceOptions(ev) {
+  return [
+    ['takeoff', 'Takeoff'],
+    ['landing', 'Landing'],
+    ...draft.events
+      .filter((o) => o.id !== ev.id && !T.eventDependsOn(draft.events, o.id, ev.id))
+      .map((o) => [o.id, o.name.trim() || 'Unnamed event']),
+  ];
+}
+
+// The source lists follow the events' names and each other's choices.
+let sourceSelects = [];
+function refreshSourceOptions() {
+  for (const { ev, select } of sourceSelects) {
+    select.replaceChildren(...sourceOptions(ev).map(([value, label]) => {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label;
+      return opt;
+    }));
+    select.value = ev.source;
+  }
 }
 
 function uniqueTemplateName(base) {
@@ -858,27 +962,15 @@ function renderTemplateList() {
 function renderTemplateEditor() {
   tplName.value = draft.name;
   tplEvents.replaceChildren();
-  draft.events.forEach((ev, i) => {
-    const row = document.createElement('div');
-    row.className = 'ev-row';
-
+  sourceSelects = [];
+  for (const ev of draft.events) {
     const nameIn = document.createElement('input');
     nameIn.className = 'ev-name';
     nameIn.value = ev.name;
     nameIn.placeholder = 'Event';
     nameIn.addEventListener('input', () => {
       ev.name = nameIn.value;
-    });
-
-    const offIn = document.createElement('input');
-    offIn.className = 'ev-offset';
-    offIn.value = ev.offset;
-    offIn.placeholder = '-0:30';
-    offIn.autocomplete = 'off';
-    markOffsetValidity(offIn, ev.offset);
-    offIn.addEventListener('input', () => {
-      ev.offset = offIn.value;
-      markOffsetValidity(offIn, ev.offset);
+      refreshSourceOptions();
     });
 
     const cd = stopwatchToggle(
@@ -892,13 +984,63 @@ function renderTemplateEditor() {
     del.textContent = '×';
     del.title = 'Remove event';
     del.addEventListener('click', () => {
-      draft.events.splice(i, 1);
+      removeDraftEvent(ev);
       renderTemplateEditor();
     });
 
-    row.append(nameIn, offIn, cd, del);
+    const select = document.createElement('select');
+    select.className = 'ev-source';
+    select.setAttribute('aria-label', 'Counts from');
+    select.addEventListener('change', () => {
+      ev.source = select.value;
+      refreshSourceOptions();
+    });
+    sourceSelects.push({ ev, select });
+
+    const sign = document.createElement('button');
+    sign.className = 'ev-sign';
+    sign.type = 'button';
+    const syncSign = () => {
+      sign.textContent = ev.after ? '+' : '\u2212';
+      sign.title = ev.after ? 'After — tap for before' : 'Before — tap for after';
+      sign.setAttribute('aria-label', ev.after ? 'After' : 'Before');
+    };
+    sign.addEventListener('click', () => {
+      ev.after = !ev.after;
+      syncSign();
+    });
+    syncSign();
+
+    const offIn = document.createElement('input');
+    offIn.className = 'ev-offset';
+    offIn.value = ev.offsetText;
+    offIn.placeholder = '1:00';
+    offIn.inputMode = 'numeric';
+    offIn.maxLength = 6;
+    offIn.autocomplete = 'off';
+    offIn.setAttribute('aria-label', 'Hours and minutes');
+    const mark = () => offIn.classList.toggle('invalid', T.parseOffsetEntry(ev.offsetText) === null);
+    // the colon appears as it is typed; leaving the box tidies it to H:MM
+    offIn.addEventListener('input', () => {
+      offIn.value = T.formatDurationEntry(offIn.value);
+      ev.offsetText = offIn.value;
+      mark();
+    });
+    offIn.addEventListener('blur', () => {
+      const size = T.parseOffsetEntry(ev.offsetText);
+      if (size !== null) ev.offsetText = offIn.value = T.minutesToHMM(size);
+    });
+    mark();
+
+    const top = el('ev-line');
+    top.append(nameIn, cd, del);
+    const from = el('ev-line');
+    from.append(select, sign, offIn);
+    const row = el('ev-row');
+    row.append(top, from);
     tplEvents.append(row);
-  });
+  }
+  refreshSourceOptions();
   tplTakeoffCdSlot.replaceChildren(stopwatchToggle(
     () => draft.takeoffCountdown === true,
     (on) => { draft.takeoffCountdown = on; },
@@ -954,7 +1096,7 @@ function openEditorFor(tpl) {
     takeoffCountdown: tpl.takeoffCountdown === true,
     includeLanding: tpl.includeLanding !== false,
     landingCountdown: tpl.landingCountdown === true,
-    events: tpl.events.map((e) => ({ ...e })),
+    events: tpl.events.map(toDraftEvent),
   };
   draftIsNew = false;
   showEditorView();
@@ -974,12 +1116,20 @@ function openEditorForNew() {
 }
 
 function saveDraft() {
+  const events = draft.events.map(fromDraftEvent);
+  if (events.includes(null)) {
+    // an offset can't be read: outline it and keep the editor open
+    renderTemplateEditor();
+    flash($('tpl-save'), 'Check offsets');
+    return;
+  }
+  const tpl = { ...draft, events };
   if (draftIsNew) {
-    state.templates.push(draft);
+    state.templates.push(tpl);
   } else {
-    const i = state.templates.findIndex((t) => t.id === draft.id);
-    if (i >= 0) state.templates[i] = draft;
-    else state.templates.push(draft);
+    const i = state.templates.findIndex((t) => t.id === tpl.id);
+    if (i >= 0) state.templates[i] = tpl;
+    else state.templates.push(tpl);
   }
   if (!state.templates.some((t) => t.id === state.activeTemplateId)) {
     state.activeTemplateId = state.templates[0]?.id ?? null;
@@ -1234,7 +1384,9 @@ function init() {
     draft.name = tplName.value;
   });
   $('tpl-add-event').addEventListener('click', () => {
-    draft.events.push({ name: '', offset: '-1:00', countdown: false });
+    draft.events.push({
+      id: newId(), name: '', source: 'takeoff', after: false, offsetText: '1:00', countdown: false,
+    });
     renderTemplateEditor();
   });
 

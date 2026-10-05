@@ -72,11 +72,66 @@ export function formatDurationEntry(input, done = false) {
   return digits.length > 2 ? `${digits.slice(0, -2)}:${digits.slice(-2)}` : digits;
 }
 
-// Signed minutes → "-2:30" / "+0:45" / "0:00".
-export function offsetToHMM(minutes) {
-  const sign = minutes < 0 ? '-' : minutes > 0 ? '+' : '';
+// An event offset typed as bare digits, the last two being minutes:
+// "315" → 195, "45" → 45, "3:15" → 195, "0" → 0. Null when empty or when
+// the minutes pass 59. The size only; before or after is chosen separately.
+export function parseOffsetEntry(input) {
+  const digits = String(input).trim().replace(':', '');
+  if (!/^\d{1,5}$/.test(digits)) return null;
+  const padded = digits.padStart(3, '0');
+  const m = Number(padded.slice(-2));
+  if (m > 59) return null;
+  return Number(padded.slice(0, -2)) * 60 + m;
+}
+
+// Minutes → "3:15" / "0:45" / "12:00" (the size of an offset, no sign).
+export function minutesToHMM(minutes) {
   const abs = Math.abs(minutes);
-  return `${sign}${Math.floor(abs / 60)}:${String(abs % 60).padStart(2, '0')}`;
+  return `${Math.floor(abs / 60)}:${String(abs % 60).padStart(2, '0')}`;
+}
+
+// ---- sequence of events ---------------------------------------------------
+// A template event is {id, source, offsetMin}: it happens offsetMin
+// minutes after (negative: before) its source, which is 'takeoff',
+// 'landing', or the id of another event in the same template.
+
+// Each event's instant, as a Map of id → ms. Null where it can't be worked
+// out: its chain ends at a landing that isn't set, at an event that isn't
+// there, or in a loop.
+export function resolveEventTimes(events, takeoffMs, landingMs = null) {
+  const byId = new Map(events.map((e) => [e.id, e]));
+  const times = new Map();
+  const inProgress = new Set();
+  const timeOf = (source) => {
+    if (source === 'takeoff') return takeoffMs;
+    if (source === 'landing') return landingMs;
+    if (times.has(source)) return times.get(source);
+    const ev = byId.get(source);
+    if (!ev || inProgress.has(source)) return null;
+    inProgress.add(source);
+    const base = timeOf(ev.source);
+    inProgress.delete(source);
+    const ms = base === null ? null : base + ev.offsetMin * 60_000;
+    times.set(source, ms);
+    return ms;
+  };
+  for (const e of events) timeOf(e.id);
+  return times;
+}
+
+// True when the event `id` counts from the event `onId`, directly or
+// through other events. An event may not take as its source one that
+// depends on it; eventDependsOn(events, id, id) finds an existing loop.
+export function eventDependsOn(events, id, onId) {
+  const byId = new Map(events.map((e) => [e.id, e]));
+  const seen = new Set();
+  let cur = byId.get(id);
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    if (cur.source === onId) return true;
+    cur = byId.get(cur.source);
+  }
+  return false;
 }
 
 // Minute-resolution countdown to an instant: "in 17hrs 18mins",

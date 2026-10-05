@@ -194,15 +194,9 @@
           <input id="tpl-name" autocomplete="off">
         </label>
       </div>
-      <div class="ev-head" aria-hidden="true">
-        <span class="h-name">Event</span>
-        <span class="h-off">Offset</span>
-        <span class="h-cd"></span>
-        <span class="h-sp"></span>
-      </div>
       <div id="tpl-events" class="tpl-events"></div>
       <div class="tpl-takeoff-row">
-        <span class="tpl-takeoff-text">Takeoff <span class="mono">0:00</span> &mdash; always included</span>
+        <span class="tpl-takeoff-text">Takeoff &mdash; always included</span>
         <span id="tpl-takeoff-cd" class="tpl-takeoff-cd"></span>
         <span class="h-sp"></span>
       </div>
@@ -217,7 +211,7 @@
       <div class="row-actions">
         <button id="tpl-add-event" type="button">+ Add event</button>
       </div>
-      <p class="hint">Offsets are relative to takeoff: <code>-2:30</code> = 2&nbsp;h 30&nbsp;min before, plain numbers are minutes. Use <code>+</code> for after takeoff. The stopwatch adds a live &ldquo;time until&rdquo; countdown to that line in the Sequence of Events. Save keeps your changes; &lsaquo;&nbsp;Templates discards them.</p>
+      <p class="hint">Each event counts from Takeoff, Landing or another event: <code>&minus;</code> is before it, <code>+</code> is after. Type <code>315</code> for 3:15. The stopwatch adds a live countdown under that event. Save keeps your changes; &lsaquo;&nbsp;Templates discards them.</p>
     </div>
 
   </div>

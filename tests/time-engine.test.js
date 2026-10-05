@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isLeapYear, daysInYear, dayOfYearUtc, parseTimeHHMM, parseJulianDay,
-  parseOffset, offsetToHMM, resolveJulianYear, makeUtcInstant,
+  parseOffset, parseOffsetEntry, minutesToHMM, resolveJulianYear, makeUtcInstant,
   zonedParts, isValidZone, buildCopyText,
   zoneLabel, utcOffsetLabel, longZoneName, zoneDisplayName, zoneWallToUtc,
   daySegments, formatCountdown, sunEvents, nightIntervals, parseDuration,
-  formatDurationEntry,
+  formatDurationEntry, resolveEventTimes, eventDependsOn,
   setZoneData,
 } from '../js/time-engine.js';
 import { readFileSync } from 'node:fs';
@@ -62,9 +62,11 @@ test('offset parsing and formatting', () => {
   assert.equal(parseOffset('0:00'), 0);
   assert.equal(parseOffset('1:5'), null);
   assert.equal(parseOffset(''), null);
-  assert.equal(offsetToHMM(-150), '-2:30');
-  assert.equal(offsetToHMM(45), '+0:45');
-  assert.equal(offsetToHMM(0), '0:00');
+  assert.equal(minutesToHMM(150), '2:30');
+  assert.equal(minutesToHMM(-150), '2:30');
+  assert.equal(minutesToHMM(45), '0:45');
+  assert.equal(minutesToHMM(0), '0:00');
+  assert.equal(minutesToHMM(960), '16:00');
 });
 
 test('year resolution: nearest upcoming with grace window', () => {
@@ -291,4 +293,86 @@ test('duration entry is tidied to HH:MM as it is typed', () => {
   for (const typed of ['835', '45', '8', '1200']) {
     assert.equal(parseDuration(formatDurationEntry(typed, true)), parseDuration(typed));
   }
+});
+
+test('offset entry: bare digits, the last two are minutes', () => {
+  assert.equal(parseOffsetEntry('315'), 195);
+  assert.equal(parseOffsetEntry('3:15'), 195);
+  assert.equal(parseOffsetEntry('45'), 45);
+  assert.equal(parseOffsetEntry('5'), 5);
+  assert.equal(parseOffsetEntry('1600'), 960);
+  assert.equal(parseOffsetEntry('16:00'), 960);
+  assert.equal(parseOffsetEntry('0'), 0);
+  assert.equal(parseOffsetEntry('0:00'), 0);
+  assert.equal(parseOffsetEntry('112:45'), 6765);
+  assert.equal(parseOffsetEntry('90'), null);      // 90 minutes is written 1:30
+  assert.equal(parseOffsetEntry('2:75'), null);
+  assert.equal(parseOffsetEntry(''), null);
+  assert.equal(parseOffsetEntry('-3:15'), null);   // the sign is chosen separately
+  assert.equal(parseOffsetEntry('abc'), null);
+  // what is shown after typing reads back the same
+  for (const min of [0, 5, 45, 195, 960, 6765]) {
+    assert.equal(parseOffsetEntry(minutesToHMM(min)), min);
+  }
+});
+
+test('events take their time from takeoff, landing or another event', () => {
+  const MIN = 60_000;
+  const takeoff = Date.UTC(2026, 9, 7, 18, 0);
+  const landing = takeoff + 515 * MIN;
+  const events = [
+    { id: 'duty', source: 'show', offsetMin: 960 },       // listed before its source
+    { id: 'show', source: 'takeoff', offsetMin: -195 },
+    { id: 'brief', source: 'show', offsetMin: 30 },
+    { id: 'debrief', source: 'landing', offsetMin: 45 },
+    { id: 'done', source: 'debrief', offsetMin: 60 },
+  ];
+  const t = resolveEventTimes(events, takeoff, landing);
+  assert.equal(t.get('show'), takeoff - 195 * MIN);
+  assert.equal(t.get('brief'), takeoff - 165 * MIN);
+  assert.equal(t.get('duty'), takeoff + 765 * MIN);
+  assert.equal(t.get('debrief'), landing + 45 * MIN);
+  assert.equal(t.get('done'), landing + 105 * MIN);
+
+  // without a landing, only what hangs off it is left open
+  const open = resolveEventTimes(events, takeoff, null);
+  assert.equal(open.get('show'), takeoff - 195 * MIN);
+  assert.equal(open.get('duty'), takeoff + 765 * MIN);
+  assert.equal(open.get('debrief'), null);
+  assert.equal(open.get('done'), null);
+  assert.equal(resolveEventTimes(events, takeoff).get('debrief'), null);
+});
+
+test('events that loop or point nowhere get no time', () => {
+  const takeoff = Date.UTC(2026, 9, 7, 18, 0);
+  const t = resolveEventTimes([
+    { id: 'a', source: 'b', offsetMin: 10 },
+    { id: 'b', source: 'a', offsetMin: 10 },
+    { id: 'self', source: 'self', offsetMin: 5 },
+    { id: 'lost', source: 'gone', offsetMin: 5 },
+    { id: 'after-a', source: 'a', offsetMin: 5 },
+    { id: 'ok', source: 'takeoff', offsetMin: -60 },
+  ], takeoff, takeoff + 1);
+  for (const id of ['a', 'b', 'self', 'lost', 'after-a']) assert.equal(t.get(id), null);
+  assert.equal(t.get('ok'), takeoff - 3_600_000);
+});
+
+test('eventDependsOn follows the chain of sources', () => {
+  const events = [
+    { id: 'show', source: 'takeoff', offsetMin: -195 },
+    { id: 'brief', source: 'show', offsetMin: 30 },
+    { id: 'step', source: 'brief', offsetMin: 60 },
+    { id: 'debrief', source: 'landing', offsetMin: 45 },
+  ];
+  assert.equal(eventDependsOn(events, 'brief', 'show'), true);
+  assert.equal(eventDependsOn(events, 'step', 'show'), true);    // through brief
+  assert.equal(eventDependsOn(events, 'show', 'step'), false);
+  assert.equal(eventDependsOn(events, 'debrief', 'show'), false);
+  assert.equal(eventDependsOn(events, 'show', 'show'), false);
+  // so "show" may not take "step" as its source: that would close a loop
+  const looped = events.map((e) => (e.id === 'show' ? { ...e, source: 'step' } : e));
+  assert.equal(eventDependsOn(looped, 'show', 'show'), true);
+  assert.equal(eventDependsOn(looped, 'debrief', 'debrief'), false);
+  // a loop elsewhere in the chain ends the search
+  assert.equal(eventDependsOn(looped, 'brief', 'debrief'), false);
 });
