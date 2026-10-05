@@ -36,6 +36,7 @@ const ZONE_CHECK_KEY = 'att-zonedata-checked';
 const DAY_MS = 86_400_000;
 const ZONE_STALE_DAYS = 30;                  // warn after this long without a check
 const ZONE_RECHECK_AFTER = 12 * 3_600_000;   // an open page checks again after this
+const FAR_TAKEOFF_DAYS = 30;                 // a takeoff further off than this is flagged
 let zoneCheckedMs = null;
 try {
   const saved = Number(localStorage.getItem(ZONE_CHECK_KEY));
@@ -581,8 +582,8 @@ function computeAll() {
   const tm = T.parseTimeHHMM(state.time);
   timeInput.classList.toggle('invalid', state.time.trim() !== '' && tm === null);
   takeoffMs = null;
-  let resolvedText = null;   // only ever a warning about the takeoff day
-  let dayNote = '';
+  let resolvedText = null;
+  let resolvedWarn = false;
 
   // Resolve the entered date to calendar components: the Zulu date in Zulu
   // mode, the local (selected-zone) date in local mode.
@@ -598,10 +599,10 @@ function computeAll() {
       const year = T.resolveJulianYear(doy, Date.now());
       if (year === null) {
         resolvedText = `Day ${doy} doesn't exist in the coming years.`;
+        resolvedWarn = true;
       } else {
         const dd = new Date(Date.UTC(year, 0, doy));
         ymd = { y: year, mo: dd.getUTCMonth() + 1, d: dd.getUTCDate() };
-        if (year !== new Date().getUTCFullYear()) dayNote = ', next year';
       }
     }
   }
@@ -610,18 +611,22 @@ function computeAll() {
     takeoffMs = state.timeMode === 'local'
       ? T.zoneWallToUtc(state.zone, ymd.y, ymd.mo, ymd.d, tm.h, tm.m)
       : Date.UTC(ymd.y, ymd.mo - 1, ymd.d, tm.h, tm.m);
-    // The takeoff itself is read off the SOEs page; this line only
-    // speaks up when the day resolved to next year.
-    if (dayNote) {
-      const p = T.zonedParts(takeoffMs, 'UTC');
-      resolvedText = `Takeoff is next year: ${p.weekday} ${p.day} ${p.month} ${p.year}`;
-    }
+    // Read the takeoff day back, as entered: the Zulu day for a Zulu
+    // entry, the local day for a local one. A Julian day resolves to its
+    // next occurrence, so a mistyped one lands months away; flag that.
+    const p = T.zonedParts(takeoffMs, state.timeMode === 'local' ? state.zone : 'UTC');
+    const day = `${p.weekday} ${Number(p.day)} ${p.month} ${p.year}`;
+    resolvedWarn = takeoffMs - Date.now() > FAR_TAKEOFF_DAYS * DAY_MS;
+    resolvedText = resolvedWarn
+      ? `Takeoff >${FAR_TAKEOFF_DAYS} days in future: ${day}`
+      : `Takeoff ${day}`;
   }
 
   computeLanding();
 
   resolvedEl.hidden = resolvedText === null;
   resolvedEl.textContent = resolvedText ?? '';
+  resolvedEl.classList.toggle('warn', resolvedWarn);
   if (document.activeElement !== zoneInput) {
     zoneInput.value = zoneDisplayValue();
     zoneInput.scrollLeft = 0;
