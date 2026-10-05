@@ -48,9 +48,15 @@ main { max-width: 780px; margin: 0 auto; padding: 12px 16px 32px; }
 .page-bar button:hover { color: var(--text); border-color: transparent; }
 .page-bar button.active { color: var(--accent); border-bottom-color: var(--accent); cursor: default; }
 
-/* Frag page: how dates are entered, for every date input below it */
-.date-mode { display: flex; justify-content: center; gap: 10px; margin: 2px 0 4px; flex-wrap: wrap; }
-.date-mode button {
+/* Frag page: how the takeoff date and time are entered, one line each,
+   the buttons lined up under each other */
+.entry-modes {
+  display: grid; grid-template-columns: auto 1fr; gap: 10px 12px;
+  align-items: center; margin: 4px 4px 2px;
+}
+.entry-mode-label { color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
+.entry-mode-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.entry-mode-btns button {
   border: 1px solid var(--border);
   background: #0f141c;
   color: var(--muted);
@@ -60,8 +66,10 @@ main { max-width: 780px; margin: 0 auto; padding: 12px 16px 32px; }
   cursor: pointer;
   white-space: nowrap;
 }
-.date-mode button:hover { border-color: var(--accent); color: var(--text); }
-.date-mode button.active {
+.entry-mode-btns button:hover { border-color: var(--accent); color: var(--text); }
+/* Local can't be chosen with a Julian day, which is always a Zulu day */
+.entry-mode-btns button:disabled { border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+.entry-mode-btns button.active {
   color: var(--accent);
   border-color: var(--accent);
   background: #1c2432;

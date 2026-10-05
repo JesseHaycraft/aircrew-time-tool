@@ -106,7 +106,8 @@ function loadState() {
     sliderZones,
     sliderZonesInitialized: true,
     dateMode: s.dateMode === 'calendar' ? 'calendar' : 'julian',
-    timeMode: s.timeMode === 'local' ? 'local' : 'zulu',
+    // a Julian day is a Zulu day, so local time goes only with a calendar date
+    timeMode: s.timeMode === 'local' && s.dateMode === 'calendar' ? 'local' : 'zulu',
     showZulu: s.showZulu !== undefined ? s.showZulu !== false : s.copyZulu !== false,
     landingOpen: s.landingOpen === true,
     landingMode: ['local', 'duration'].includes(s.landingMode) ? s.landingMode : 'zulu',
@@ -172,6 +173,7 @@ const landingCalc = $('landing-calc');
 const landingCalcLabel = $('landing-calc-label');
 const timeInput = $('ztime');
 const dateLabel = $('date-label');
+const timeLabel = $('time-label');
 const resolvedEl = $('resolved');
 const soeEmpty = $('soe-empty');
 const zoneNote = $('zone-note');
@@ -754,14 +756,18 @@ function updateModeUI() {
   calInput.hidden = !cal;
   modeJulianBtn.classList.toggle('active', !cal);
   modeCalBtn.classList.toggle('active', cal);
-  dateLabel.textContent = cal ? 'Date' : 'Julian day';
   const local = state.timeMode === 'local';
   modeZuluBtn.classList.toggle('active', !local);
   modeLocalBtn.classList.toggle('active', local);
+  modeLocalBtn.disabled = !cal;
+  dateLabel.textContent = !cal ? 'Julian day (Zulu)' : local ? 'Date (local)' : 'Date (Zulu)';
+  timeLabel.textContent = local ? 'Time (local)' : 'Time (Zulu)';
 }
 
 function setDateMode(mode) {
   state.dateMode = mode;
+  // going back to Calendar afterwards leaves Zulu chosen
+  if (mode === 'julian') state.timeMode = 'zulu';
   saveState();
   updateModeUI();
   computeAll();
@@ -771,6 +777,7 @@ function setDateMode(mode) {
 }
 
 function setTimeMode(mode) {
+  if (mode === 'local' && state.dateMode !== 'calendar') return;
   state.timeMode = mode;
   saveState();
   updateModeUI();

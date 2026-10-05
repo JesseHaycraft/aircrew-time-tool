@@ -20,24 +20,29 @@
 </nav>
 <main>
   <div id="frag-page">
-  <div class="date-mode" role="group" aria-label="Enter dates as">
-    <button id="mode-julian" type="button">Julian day</button>
-    <button id="mode-cal" type="button">Calendar</button>
+  <div class="entry-modes">
+    <span class="entry-mode-label">T/O Date:</span>
+    <div class="entry-mode-btns" role="group" aria-label="Takeoff date entered as">
+      <button id="mode-julian" type="button">Julian day</button>
+      <button id="mode-cal" type="button">Calendar</button>
+    </div>
+    <span class="entry-mode-label">T/O Time:</span>
+    <div class="entry-mode-btns" role="group" aria-label="Takeoff time entered as">
+      <button id="mode-zulu" type="button">Zulu</button>
+      <button id="mode-local" type="button">Local</button>
+    </div>
   </div>
 
   <section class="card">
     <h2>Takeoff</h2>
     <div class="inputs-row">
       <div class="input-group">
-        <div id="date-label" class="input-top">Julian day</div>
+        <div id="date-label" class="input-top">Julian day (Zulu)</div>
         <input id="doy" inputmode="numeric" placeholder="254" maxlength="3" autocomplete="off">
         <input id="caldate" type="date" hidden>
       </div>
       <div class="input-group">
-        <div class="input-top mode-toggle">
-          <button id="mode-zulu" type="button">Zulu</button>
-          <button id="mode-local" type="button">Local</button>
-        </div>
+        <div id="time-label" class="input-top">Time (Zulu)</div>
         <input id="ztime" inputmode="numeric" placeholder="0530" maxlength="5" autocomplete="off">
       </div>
     </div>
