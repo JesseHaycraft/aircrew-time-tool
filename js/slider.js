@@ -2,8 +2,8 @@
 // line. The line is the selected instant; bars carry local-day segments
 // whose widths come from real midnight boundaries (23/25 h across DST),
 // tinted by calendar day with the night hours darker.
-import * as T from './time-engine.js?v=0.5.1';
-import { zoneCoords } from './zone-coords.js?v=0.5.1';
+import * as T from './time-engine.js?v=0.5.2';
+import { zoneCoords } from './zone-coords.js?v=0.5.2';
 
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
@@ -33,7 +33,8 @@ export function initSlider({
   let rafPending = false;
 
   const snapTo = (ms, step) => Math.round(ms / step) * step;
-  const nowMin = () => snapTo(Date.now(), MINUTE);
+  // the minute the device's own clock is showing: floored, never rounded up
+  const nowMin = () => Math.floor(Date.now() / MINUTE) * MINUTE;
   let fling = null;      // { v: slider ms per real ms, last: performance.now(), pos: float ms }
   let exactReadout = false; // ±1 / Now / Takeoff / Landing show the exact minute; sliding rounds again
   const shownT = () => (exactReadout ? sliderT : snapTo(sliderT, READOUT_STEP));
@@ -288,7 +289,7 @@ export function initSlider({
     lastTick = now;
     if (mode === 'now') setT(now, 'now', true);
     else schedule();
-  }, 5_000);
+  }, 1_000);
 
   // Called every time the page becomes visible. A new session starts on
   // Now; a takeoff computed since the slider was last looked at re-seeds
