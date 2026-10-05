@@ -1,0 +1,12 @@
+{
+  "about": "Where data/tzdata.json is expected to differ from the JavaScript runtime's own zone rules, keyed by the runtime's tz version (process.versions.tz). Each entry is a zone, the UTC date range in which differences are allowed (until null = open-ended), and the release note that explains it. A runtime on the same tz version as the data file must show no differences at all.",
+  "2026b": [
+    { "zone": "Africa/Casablanca", "from": "2026-09-20", "until": null, "why": "2026c: Morocco moves to permanent +00 on 2026-09-20" },
+    { "zone": "Africa/El_Aaiun", "from": "2026-09-20", "until": null, "why": "2026c: Morocco moves to permanent +00 on 2026-09-20 (Western Sahara follows)" },
+    { "zone": "America/Edmonton", "from": "2026-11-01", "until": null, "why": "2026c: Alberta moved to permanent -06; modeled from 2026-11-01" },
+    { "zone": "America/Inuvik", "from": "2026-11-01", "until": null, "why": "2026d: Northwest Territories moved to permanent -06; modeled from 2026-11-01" },
+    { "zone": "America/Winnipeg", "from": "2026-11-01", "until": null, "why": "2026e: Manitoba moves to permanent -05; modeled from 2026-11-01" },
+    { "zone": "America/Bogota", "from": "1992-05-02", "until": "1992-05-04", "why": "2026d: Colombia's 1992-05-02 spring forward was at 00:00, not 24:00" },
+    { "zone": "Asia/Tehran", "from": "1979-05-25", "until": "1979-05-27", "why": "2026d: Iran's 1979-05-26 spring forward was at 00:00, not 24:00" }
+  ]
+}
