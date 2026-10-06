@@ -125,7 +125,6 @@
     <section class="card">
       <h2>Aircrew Time Tool</h2>
       <p class="about-line">Version <span id="version"></span> <span id="released" class="about-muted"></span></p>
-      <p class="hint">The app downloads time zone updates from the GitHub repo but uploads zero data anywhere. Your data never leaves this device.</p>
       <div class="row-actions about-check">
         <button id="app-check-btn" type="button">Check for updates</button>
         <span id="app-check-result" class="about-result" role="status"></span>
@@ -139,6 +138,10 @@
         <button id="zone-check-btn" type="button">Check for updates</button>
         <span id="zone-check-result" class="about-result" role="status"></span>
       </div>
+    </section>
+    <section class="card">
+      <h2>Data policy</h2>
+      <p class="hint">The app checks the time zone database on the GitHub repo whenever it opens and downloads it if it&rsquo;s newer than the local copy. However, no data is ever uploaded from the app. Your data never leaves this device.</p>
     </section>
     <section class="card">
       <h2>Feedback</h2>

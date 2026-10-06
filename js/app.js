@@ -494,12 +494,23 @@ function renderZoneStamp() {
     : days === 0 ? ', checked today'
     : days === 1 ? ', checked yesterday'
     : `, checked ${days} days ago`;
+  // the release name in white; its date and the check in grey, the check
+  // in orange once it is overdue
   const released = info.released ? ` of ${prettyDate(info.released)}` : '';
-  zoneStamp.textContent = `IANA release ${info.version}${released}${checked}`;
-  zoneStamp.classList.toggle('warn', stale);
+  const muted = (text, cls) => {
+    const span = document.createElement('span');
+    span.className = cls;
+    span.textContent = text;
+    return span;
+  };
+  zoneStamp.classList.remove('warn');
+  zoneStamp.replaceChildren(
+    `IANA release ${info.version}`,
+    muted(released, 'about-muted'),
+    muted(checked, stale ? 'about-warn' : 'about-muted'),
+  );
   zoneDetail.textContent = `Built ${prettyDate(info.built)}. `
-    + `Covers ${new Date(info.fromMs).getUTCFullYear()}–${new Date(info.untilMs - 1).getUTCFullYear()}. `
-    + 'The app checks for a newer release whenever it is opened online.';
+    + `Covers ${new Date(info.fromMs).getUTCFullYear()}–${new Date(info.untilMs - 1).getUTCFullYear()}.`;
 }
 
 // A small element with a class and, usually, some text.
