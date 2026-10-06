@@ -124,8 +124,12 @@
   <div id="about-page" hidden>
     <section class="card">
       <h2>Aircrew Time Tool</h2>
-      <p class="about-line">Version <span id="version"></span></p>
-      <p class="hint">All times are computed on your device. The app downloads time zone updates and sends nothing about you.</p>
+      <p class="about-line">Version <span id="version"></span> <span id="released" class="about-muted"></span></p>
+      <p class="hint">The app downloads time zone updates from the GitHub repo but uploads zero data anywhere. Your data never leaves this device.</p>
+      <div class="row-actions about-check">
+        <button id="app-check-btn" type="button">Check for updates</button>
+        <span id="app-check-result" class="about-result" role="status"></span>
+      </div>
     </section>
     <section class="card">
       <h2>Time zone data</h2>

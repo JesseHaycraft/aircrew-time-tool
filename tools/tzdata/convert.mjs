@@ -84,7 +84,7 @@ export function parseSources(text) {
 // seconds east of UTC. Per zone: `types` lists the distinct
 // [offset, abbreviation, isDst] states, `start` is the state in force at
 // `from`, and `at[i]` is the instant the zone switches to `types[to[i]]`.
-export function buildData({ dump, sources, version, built, fromYear, untilYear }) {
+export function buildData({ dump, sources, version, released, built, fromYear, untilYear }) {
   const from = Date.UTC(fromYear, 0, 1) / 1000;
   const until = Date.UTC(untilYear, 0, 1) / 1000;
   const zones = {};
@@ -113,7 +113,7 @@ export function buildData({ dump, sources, version, built, fromYear, untilYear }
   }
   const links = {};
   for (const name of [...sources.links.keys()].sort()) links[name] = sources.links.get(name);
-  return { format: 1, version, built, from, until, zones, links };
+  return { format: 1, version, released, built, from, until, zones, links };
 }
 
 // JSON with one zone (and one link) per line, so a rule change shows up

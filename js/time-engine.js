@@ -188,6 +188,9 @@ function zoneDataProblem(data) {
   const isInt = Number.isInteger;
   if (!data || data.format !== 1) return 'unknown format';
   if (typeof data.version !== 'string' || !/^\d{4}[a-z]+$/.test(data.version)) return 'bad version';
+  const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  // files from before the release date was recorded have no `released`
+  if (!isDate(data.built) || (data.released !== undefined && !isDate(data.released))) return 'bad date';
   if (!isInt(data.from) || !isInt(data.until) || data.from >= data.until) return 'bad range';
   if (!data.zones || typeof data.zones !== 'object' || !data.links || typeof data.links !== 'object') {
     return 'missing zones or links';
@@ -238,10 +241,13 @@ export function setZoneData(data) {
   return true;
 }
 
-// Version and coverage of the installed data, or null when none is.
+// Version, dates and coverage of the installed data, or null when none
+// is. `released` is the IANA release's date, or null for a file that
+// predates its recording.
 export function zoneDataInfo() {
   return zoneData && {
     version: zoneData.version,
+    released: zoneData.released ?? null,
     built: zoneData.built,
     fromMs: zoneData.from * 1000,
     untilMs: zoneData.until * 1000,

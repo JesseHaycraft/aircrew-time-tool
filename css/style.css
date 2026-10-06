@@ -559,6 +559,7 @@ button.danger:hover { border-color: var(--danger); }
 /* ---- about page ---- */
 .about-line { margin: 0; color: var(--bright); }
 .about-line.warn { color: var(--warn); }
+.about-muted { color: var(--muted); }
 .about-check { align-items: center; }
 .about-result { color: var(--bright); font-size: 0.9rem; }
 .about-result.warn { color: var(--warn); }

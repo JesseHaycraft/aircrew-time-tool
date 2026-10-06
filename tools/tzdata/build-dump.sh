@@ -10,7 +10,7 @@
 #   VERSION     an IANA release such as 2026e, or "latest"
 #   FROM_YEAR   first year covered (inclusive)
 #   UNTIL_YEAR  first year not covered (exclusive)
-#   OUT_DIR     receives dump.txt, sources.txt and version
+#   OUT_DIR     receives dump.txt, sources.txt, version and released
 set -eu
 
 version=$1
@@ -63,6 +63,13 @@ sources="africa antarctica asia australasia etcetera europe northamerica southam
 mkdir -p "$out"
 cat $sources > "$out/sources.txt"
 cp version "$out/version"
+# the release's date, from the top of its own NEWS file
+released=$(sed -n "s/^Release $(cat version) - \([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\).*/\1/p" NEWS | head -n 1)
+if [ -z "$released" ]; then
+  echo "could not find the release date of tz $(cat version) in NEWS" >&2
+  exit 1
+fi
+echo "$released" > "$out/released"
 
 : > "$out/dump.txt"
 for zone in $(awk '$1 == "Zone" { print $2 }' $sources); do

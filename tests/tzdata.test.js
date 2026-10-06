@@ -16,6 +16,9 @@ const HOUR = 3_600_000;
 test('data file: version and coverage', () => {
   const info = zoneDataInfo();
   assert.match(info.version, /^\d{4}[a-z]+$/);
+  assert.match(info.released, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(info.built, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(info.released <= info.built, 'built from a release that was already out');
   assert.equal(info.fromMs, Date.UTC(1970, 0, 1));
   // through ten full calendar years past the build year
   const builtYear = Number(info.built.slice(0, 4));

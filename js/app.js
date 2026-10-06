@@ -5,6 +5,7 @@ import * as T from './time-engine.js?v=0.8.0';
 import { initSlider } from './slider.js?v=0.8.0';
 
 const VERSION = 'v0.8.0';
+const RELEASED = '2026-10-05';   // the day this version went live; moves with VERSION
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -208,6 +209,8 @@ const zoneStamp = $('zone-stamp');
 const zoneDetail = $('zone-detail');
 const zoneCheckBtn = $('zone-check-btn');
 const zoneCheckResult = $('zone-check-result');
+const appCheckBtn = $('app-check-btn');
+const appCheckResult = $('app-check-result');
 const zoneInput = $('zone-input');
 const suggestEl = $('zone-suggest');
 const timelineEl = $('timeline');
@@ -467,6 +470,12 @@ function zoneDataStaleDays() {
   return days !== null && days >= ZONE_STALE_DAYS ? days : null;
 }
 
+// "2026-09-29" → "29 Sep 2026".
+function prettyDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1]} ${y}`;
+}
+
 // About-page stamp: which release of the time zone rules the app is
 // running on and when it last checked for a newer one, the way a chart
 // carries its edition and currency.
@@ -485,9 +494,10 @@ function renderZoneStamp() {
     : days === 0 ? ', checked today'
     : days === 1 ? ', checked yesterday'
     : `, checked ${days} days ago`;
-  zoneStamp.textContent = `IANA release ${info.version}${checked}`;
+  const released = info.released ? ` of ${prettyDate(info.released)}` : '';
+  zoneStamp.textContent = `IANA release ${info.version}${released}${checked}`;
   zoneStamp.classList.toggle('warn', stale);
-  zoneDetail.textContent = `Built ${info.built}. `
+  zoneDetail.textContent = `Built ${prettyDate(info.built)}. `
     + `Covers ${new Date(info.fromMs).getUTCFullYear()}–${new Date(info.untilMs - 1).getUTCFullYear()}. `
     + 'The app checks for a newer release whenever it is opened online.';
 }
@@ -1444,8 +1454,38 @@ async function checkZoneDataNow() {
     : 'Couldn’t check. Go online and try again.';
 }
 
+// About page: ask the site which version of the app it serves now. The
+// page itself can only be replaced by reloading, so a newer one is
+// offered that way.
+async function checkAppVersionNow() {
+  appCheckBtn.disabled = true;
+  appCheckResult.className = 'about-result';
+  appCheckResult.replaceChildren('Checking…');
+  let latest = null;
+  try {
+    const res = await fetch('index.html', { cache: 'no-cache' });
+    if (res.ok) latest = /js\/app\.js\?v=([\w.-]+)/.exec(await res.text())?.[1] ?? null;
+  } catch { /* offline, blocked or unreadable */ }
+  appCheckBtn.disabled = false;
+  const mine = VERSION.replace(/^v/, '');
+  if (latest === null) {
+    appCheckResult.classList.add('warn');
+    appCheckResult.replaceChildren('Couldn’t check. Go online and try again.');
+  } else if (latest === mine) {
+    appCheckResult.replaceChildren('You are running the latest version.');
+  } else {
+    const reload = document.createElement('button');
+    reload.type = 'button';
+    reload.className = 'ghost';
+    reload.textContent = 'Reload to update';
+    reload.addEventListener('click', () => location.reload());
+    appCheckResult.replaceChildren(`Version ${latest} is available. `, reload);
+  }
+}
+
 function init() {
   $('version').textContent = VERSION.replace(/^v/, '');
+  $('released').textContent = `released ${prettyDate(RELEASED)}`;
   renderZoneStamp();
   doyInput.value = state.doy;
   calInput.value = state.calDate;
@@ -1590,6 +1630,7 @@ function init() {
     applyPage(page);
   });
   zoneCheckBtn.addEventListener('click', checkZoneDataNow);
+  appCheckBtn.addEventListener('click', checkAppVersionNow);
 
   computeAll();
 

@@ -43,6 +43,7 @@ const data = buildData({
   dump: parseDump(readFileSync(join(workDir, 'dump.txt'), 'utf8')),
   sources: parseSources(readFileSync(join(workDir, 'sources.txt'), 'utf8')),
   version: readFileSync(join(workDir, 'version'), 'utf8').trim(),
+  released: readFileSync(join(workDir, 'released'), 'utf8').trim(),
   built: now.toISOString().slice(0, 10),
   fromYear: FROM_YEAR,
   untilYear,
