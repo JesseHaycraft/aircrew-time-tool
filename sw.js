@@ -11,7 +11,7 @@
 // (the zone data file, this page's version); those always go to the
 // network, so an update is never answered from the stored copy.
 
-const VERSION = '0.8.1';
+const VERSION = '0.9.0';
 const CACHE = `att-${VERSION}`;
 const SHELL = [
   './',
