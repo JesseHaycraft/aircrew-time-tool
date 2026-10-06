@@ -129,6 +129,7 @@ export function initSlider({
 
       if (row.evStrip) {
         row.evStrip.replaceChildren();
+        row.ticks = [];
         const events = getEvents();
         // no sequence yet (no takeoff): no band either
         row.evStrip.parentElement.hidden = events.length === 0;
@@ -143,6 +144,7 @@ export function initSlider({
           lab.title = ev.name;
           tick.append(lab);
           row.evStrip.append(tick);
+          row.ticks.push({ ms: ev.ms, el: tick });
         }
       }
     }
@@ -154,7 +156,11 @@ export function initSlider({
     const shift = (t0 - sliderT) * PX_PER_MS;
     for (const row of rows) {
       row.strip.style.transform = `translateX(${shift}px)`;
-      if (row.evStrip) row.evStrip.style.transform = `translateX(${shift}px)`;
+      if (row.evStrip) {
+        row.evStrip.style.transform = `translateX(${shift}px)`;
+        // the event the bars sit on is named in white
+        for (const t of row.ticks) t.el.classList.toggle('on', exactReadout && t.ms === sliderT);
+      }
 
       row.timeEl.textContent = T.zonedParts(shownT(), row.zone).hhmm;
       const abbr = T.zoneAbbr(sliderT, row.zone);
@@ -220,19 +226,32 @@ export function initSlider({
     schedule();
   }
 
-  // When the bars come to rest within SNAP_MS of an event in the sequence,
-  // they settle on it exactly, so the readouts show the event's own time.
-  function settle() {
+  // The event in the sequence within SNAP_MS of an instant, nearest first.
+  function nearestEvent(ms) {
     let best = null;
     for (const ev of getEvents()) {
-      const d = Math.abs(ev.ms - sliderT);
-      if (d <= SNAP_MS && (best === null || d < Math.abs(best.ms - sliderT))) best = ev;
+      const d = Math.abs(ev.ms - ms);
+      if (d <= SNAP_MS && (best === null || d < Math.abs(best.ms - ms))) best = ev;
     }
-    if (!best) return;
-    sliderT = best.ms;
-    mode = best.ms === getTakeoffMs() ? 'takeoff' : best.ms === getLandingMs() ? 'landing' : null;
+    return best;
+  }
+
+  // Put the bars exactly on an event, so the readouts show its own time;
+  // on the takeoff or landing, that button lights as if tapped.
+  function landOn(ev) {
+    fling = null;
+    sliderT = ev.ms;
+    mode = ev.ms === getTakeoffMs() ? 'takeoff' : ev.ms === getLandingMs() ? 'landing' : null;
     exactReadout = true;
+    if (Math.abs(sliderT - t0) > REBUILD_MS) buildSegments();
     schedule();
+  }
+
+  // The bars are magnetic: within SNAP_MS of an event they sit on it, both
+  // under a moving finger and when a flick comes to rest.
+  function settle() {
+    const ev = nearestEvent(sliderT);
+    if (ev) landOn(ev);
   }
 
   // Momentum after a swipe: keep the release velocity and let it decay
@@ -279,7 +298,9 @@ export function initSlider({
     const now = performance.now();
     trail.push({ t: now, x: e.clientX });
     while (trail.length > 2 && now - trail[0].t > VELOCITY_WINDOW) trail.shift();
-    setT(dragStartT - (e.clientX - dragStartX) / PX_PER_MS);
+    const raw = dragStartT - (e.clientX - dragStartX) / PX_PER_MS;
+    const ev = nearestEvent(raw);
+    if (ev) landOn(ev); else setT(raw);
   });
   const endDrag = (e) => {
     if (dragId !== e.pointerId) return;

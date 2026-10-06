@@ -527,6 +527,8 @@ button.danger:hover { border-color: var(--danger); }
   max-width: 56px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-size: 0.65rem; line-height: 1; color: var(--muted);
 }
+.sl-ev.on { border-left-color: var(--bright); }
+.sl-ev.on .sl-ev-label { color: var(--bright); }
 .sl-seg {
   position: absolute; top: 0; bottom: 0;
   border: 1px solid var(--border);
