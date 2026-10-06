@@ -6,7 +6,7 @@ A phone-sized utility for flight crews: enter the takeoff from the frag, choose 
 
 ## Status
 
-v0.9.0 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
+v0.9.1 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
 
 ## Features
 
