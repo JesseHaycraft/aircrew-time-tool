@@ -1,38 +1,39 @@
 # Aircrew Time Tool
 
-A one-screen utility for flight crews: take the Julian day + Zulu takeoff time from dispatch, see it in any time zone, back-calculate your pre-takeoff events (brief, show, step, start…), and copy the whole timeline as text to paste into any messaging app.
+A phone-sized utility for flight crews: enter the takeoff from the frag, choose the local time zone, and get the whole sequence of events in local and Zulu time, ready to copy into any messaging app.
 
 **Live app:** https://jessehaycraft.github.io/aircrew-time-tool/
 
 ## Status
 
-v0.7.0 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
+v0.8.0 — early field testing. Found a wrong time or a rough edge? [Open an issue](../../issues).
 
-## Features (v0.1)
+## Features
 
-- Julian day + Zulu time in; the resolved calendar date is always shown as a sanity check (the year is inferred as the nearest upcoming occurrence of that day)
-- Or toggle to a calendar date picker (defaults to today); the Julian day is then shown as the sanity check
-- Takeoff time entered as Zulu or as local time in the selected zone (toggle); local entry converts DST-correctly
-- Local times in your device's time zone by default — searchable zone picker (city, zone name, abbreviation, or offset), DST-correct as of the event date
-- Named event templates saved on your device — create, edit, duplicate, delete; takeoff (0:00) is always included; ships with a "Standard" template (Stop drink T−12:00, LFA T−4:15, Bus T−3:15)
-- If the sequence spans more than one calendar day, every time carries its weekday (`1730Z (THU 10)`); single-day sequences show no flags
-- One-tap copy of the whole sequence of events as plain text
-- A "Convert timezones" page: per-zone day bars that drag together under a fixed line (1-minute precision, hour tick marks, DST-correct day widths); add any zones alongside Zulu and your Julian-page zone; seeds from your latest takeoff calculation
-- No accounts, no server, no tracking — everything is computed on-device
+- **Frag:** the takeoff as a Julian day (always a Zulu day) or a calendar date, in Zulu or local time; a Julian day is read back as its calendar day, flagged when it falls more than 30 days ahead. The local time zone, found by city, zone name, abbreviation or offset, or the device's own. An optional flight duration, which shows the landing in Zulu and local.
+- **SOEs:** the sequence of events for the chosen template, each event with where its time comes from (`Takeoff − 3:15`, `Show + 16:00`) and its local and Zulu times; when the sequence crosses midnight, each time carries its day. Live countdowns on the events you choose.
+- **Templates:** saved on the device; create, edit, duplicate, delete. Each event counts from takeoff, from landing or from another event, before or after it. The editor lists events in time order and opens one at a time.
+- **Copy times:** the text exactly as it will be copied, one checkbox per line, with or without the Zulu column.
+- **Convert:** per-zone day bars that drag together under a fixed line (1-minute precision, hour tick marks, DST-correct day widths), with any zones alongside Zulu; jumps to now, takeoff and landing.
+- **About:** the version, the time zone data release in use and when it was last checked, with a button to check now.
+- No accounts, no server, no tracking — everything is computed on the device.
 
 ## Example output
 
 ```
-STOP DRINK: 1730Z (THU 10) / 1330 EDT (THU 10)
-LFA: 0115Z (FRI 11) / 2115 EDT (THU 10)
-BUS: 0215Z (FRI 11) / 2215 EDT (THU 10)
-TAKEOFF: 0530Z (FRI 11) / 0130 EDT (FRI 11)
+Local: Guam (ChST)
+1600L (WED)  0600Z (WED)  Stop drink
+2345L (WED)  1345Z (WED)  LFA
+0045L (THU)  1445Z (WED)  Bus
+0400L (THU)  1800Z (WED)  Takeoff
+1235L (THU)  0235Z (THU)  Landing
 ```
 
 ## Roadmap
 
-- Template sharing via copyable text codes (no server needed)
-- Installable PWA with full offline support; then iOS/Android apps via Capacitor
+- Template sharing through copyable text codes (no server needed)
+- Installable web app with full offline support
+- Native iOS and Android apps
 
 ## Development
 
