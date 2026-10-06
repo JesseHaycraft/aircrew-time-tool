@@ -1465,9 +1465,9 @@ async function checkZoneDataNow() {
     : 'Couldn’t check. Go online and try again.';
 }
 
-// About page: ask the site which version of the app it serves now. The
-// page itself can only be replaced by reloading, so a newer one is
-// offered that way.
+// About page: ask the site which version of the app it serves now. In a
+// plain browser tab a newer one is offered by reloading; installed as an
+// app, the service worker fetches it for the next launch.
 async function checkAppVersionNow() {
   appCheckBtn.disabled = true;
   appCheckResult.className = 'about-result';
@@ -1484,6 +1484,11 @@ async function checkAppVersionNow() {
     appCheckResult.replaceChildren('Couldn’t check. Go online and try again.');
   } else if (latest === mine) {
     appCheckResult.replaceChildren('You are running the latest version.');
+  } else if (navigator.serviceWorker?.controller) {
+    // installed as an app: the new version is fetched in the background
+    // and takes over at the next launch (see sw.js)
+    try { await (await navigator.serviceWorker.getRegistration())?.update(); } catch { /* best effort */ }
+    appCheckResult.replaceChildren(`Version ${latest} is downloading. It will be ready the next time you open the app.`);
   } else {
     const reload = document.createElement('button');
     reload.type = 'button';
@@ -1725,6 +1730,13 @@ function start() {
 }
 if (loadSavedZoneData()) start();
 else setTimeout(start, 3000);
+
+// Keep a copy of the app on the device, for instant starts and offline
+// use (sw.js). Browsers only allow this over HTTPS or on localhost; the
+// app is the same without it.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => { /* not available here */ });
+}
 checkZoneData().then((result) => {
   if (started) afterZoneCheck(result);
   start();

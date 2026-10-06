@@ -16,6 +16,7 @@ v0.8.1 — early field testing. Found a wrong time or a rough edge? [Open an iss
 - **Copy times:** the text exactly as it will be copied, one checkbox per line, with or without the Zulu column.
 - **Convert:** per-zone day bars that drag together under a fixed line (1-minute precision, hour tick marks, DST-correct day widths), with any zones alongside Zulu; jumps to now, takeoff and landing.
 - **About:** the version, the time zone data release in use and when it was last checked, with a button to check now.
+- **Installable:** add it to the home screen from the browser menu and it opens like an app, instantly and without signal. A new version is fetched in the background and appears at the next launch.
 - No accounts, no server, no tracking — everything is computed on the device.
 
 ## Example output
@@ -32,7 +33,6 @@ Local: Guam (ChST)
 ## Roadmap
 
 - Template sharing through copyable text codes (no server needed)
-- Installable web app with full offline support
 - Native iOS and Android apps
 
 ## Development
@@ -46,6 +46,8 @@ npm run build:tzdata
 ```
 
 This normally happens by itself. A scheduled workflow (`.github/workflows/zone-data.yml`) checks IANA once a day; when a new release is out it verifies the release's signature, rebuilds the file, tests it, and opens a pull request describing which zones change. Merging the pull request publishes the data, and the app picks it up the next time it is opened online. A pull request left alone is merged automatically after seven days if the tests still pass.
+
+`sw.js` keeps a copy of the app on the device for offline use; its version number, the `?v=` tags in `index.html` and the imports move together at each release. The icons in `icons/` are drawn by `node tools/make-icons.mjs`.
 
 All time math lives in `js/time-engine.js` (pure functions, no DOM). Run its tests with:
 
