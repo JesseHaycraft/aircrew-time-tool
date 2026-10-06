@@ -43,12 +43,12 @@
     <div class="inputs-row">
       <div class="input-group">
         <div id="date-label" class="input-top">Julian day (Zulu)</div>
-        <input id="doy" inputmode="numeric" placeholder="254" maxlength="3" autocomplete="off">
+        <input id="doy" inputmode="numeric" placeholder="---" maxlength="3" autocomplete="off">
         <input id="caldate" type="date" hidden>
       </div>
       <div class="input-group">
         <div id="time-label" class="input-top">Time (Zulu)</div>
-        <input id="ztime" inputmode="numeric" placeholder="0530" maxlength="5" autocomplete="off">
+        <input id="ztime" inputmode="numeric" placeholder="----" maxlength="5" autocomplete="off">
       </div>
     </div>
     <p id="resolved" class="resolved warn" hidden></p>
@@ -69,7 +69,7 @@
     <h2>Flight duration (optional)</h2>
     <div class="inputs-row">
       <div class="input-group duration-group">
-        <input id="landing-input" inputmode="numeric" placeholder="08:35" maxlength="5" autocomplete="off" aria-label="Flight duration, hours and minutes">
+        <input id="landing-input" inputmode="numeric" placeholder="--:--" maxlength="5" autocomplete="off" aria-label="Flight duration, hours and minutes">
       </div>
     </div>
     <p id="landing-calc" class="resolved" hidden></p>

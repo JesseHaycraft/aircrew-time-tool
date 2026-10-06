@@ -23,7 +23,7 @@ const GREENWICH = [51.48, 0];        // Zulu has no place; shade its nights by G
 
 export function initSlider({
   stage, rowsEl, nowLine, nowTimeEl, nowBtn, takeoffBtn, landingBtn, minusBtn, plusBtn,
-  getLocalZone, getExtraZones, getTakeoffMs, getLandingMs,
+  getLocalZone, getExtraZones, getTakeoffMs, getLandingMs, getEvents,
 }) {
   let sliderT = null;    // selected instant (ms epoch)
   let mode = 'now';      // 'now' follows the clock, 'takeoff' sits on it, null = free
@@ -72,9 +72,20 @@ export function initSlider({
       strip.className = 'sl-strip';
       track.append(strip);
 
-      row.append(info, track);
+      // the Zulu row carries the sequence of events above its bar
+      let evStrip = null;
+      if (def.zone === 'UTC') {
+        const band = document.createElement('div');
+        band.className = 'sl-events';
+        evStrip = document.createElement('div');
+        evStrip.className = 'sl-ev-strip';
+        band.append(evStrip);
+        row.append(info, band, track);
+      } else {
+        row.append(info, track);
+      }
       rowsEl.append(row);
-      return { ...def, subEl, timeEl, strip, segs: [] };
+      return { ...def, subEl, timeEl, strip, evStrip, segs: [] };
     });
   }
 
@@ -114,6 +125,25 @@ export function initSlider({
         row.segs.push({ lab, left, width, labW: 0 });
       }
       for (const s of row.segs) s.labW = Math.ceil(s.lab.offsetWidth);
+
+      if (row.evStrip) {
+        row.evStrip.replaceChildren();
+        const events = getEvents();
+        // no sequence yet (no takeoff): no band either
+        row.evStrip.parentElement.hidden = events.length === 0;
+        for (const ev of events) {
+          if (ev.ms < from || ev.ms > to) continue;
+          const tick = document.createElement('div');
+          tick.className = 'sl-ev';
+          tick.style.left = `${(ev.ms - t0) * PX_PER_MS + w / 2}px`;
+          const lab = document.createElement('span');
+          lab.className = 'sl-ev-label';
+          lab.textContent = ev.name;
+          lab.title = ev.name;
+          tick.append(lab);
+          row.evStrip.append(tick);
+        }
+      }
     }
   }
 
@@ -123,6 +153,7 @@ export function initSlider({
     const shift = (t0 - sliderT) * PX_PER_MS;
     for (const row of rows) {
       row.strip.style.transform = `translateX(${shift}px)`;
+      if (row.evStrip) row.evStrip.style.transform = `translateX(${shift}px)`;
 
       row.timeEl.textContent = T.zonedParts(shownT(), row.zone).hhmm;
       const abbr = T.zoneAbbr(sliderT, row.zone);

@@ -1163,7 +1163,7 @@ function renderOpenEvent(ev) {
   const offIn = document.createElement('input');
   offIn.className = 'ev-offset';
   offIn.value = ev.offsetText;
-  offIn.placeholder = '1:00';
+  offIn.placeholder = '-:--';
   offIn.inputMode = 'numeric';
   offIn.maxLength = 6;
   offIn.autocomplete = 'off';
@@ -1372,6 +1372,8 @@ const slider = initSlider({
   getExtraZones: () => state.sliderZones,
   getTakeoffMs: () => takeoffMs,
   getLandingMs: () => landingMs,
+  // the sequence of events, for the ticks above the Zulu bar
+  getEvents: () => (takeoffMs === null ? [] : timelineEvents().filter((ev) => ev.ms !== null)),
 });
 
 // ---- slider zone editor --------------------------------------------------

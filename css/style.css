@@ -54,12 +54,12 @@ main { max-width: 780px; margin: 0 auto; padding: 12px 16px 32px; }
   display: grid; grid-template-columns: auto 1fr; gap: 10px 12px;
   align-items: center; margin: 4px 4px 2px;
 }
-.entry-mode-label { color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
+.entry-mode-label { color: var(--text); font-size: 0.9rem; white-space: nowrap; }
 .entry-mode-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .entry-mode-btns button {
   border: 1px solid var(--border);
   background: #0f141c;
-  color: var(--muted);
+  color: var(--text);
   font-size: 0.9rem;
   padding: 8px 16px;
   border-radius: 999px;
@@ -88,7 +88,7 @@ main { max-width: 780px; margin: 0 auto; padding: 12px 16px 32px; }
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--muted);
+  color: var(--text);
 }
 /* the flight duration box is the width of one takeoff box */
 .input-group.duration-group { flex: 0 1 calc(50% - 6px); }
@@ -120,7 +120,7 @@ input.invalid { border-color: var(--danger); }
 }
 .input-top {
   display: flex; align-items: center; min-height: 30px;
-  font-size: 0.85rem; color: var(--muted);
+  font-size: 0.85rem; color: var(--text);
 }
 .input-group > input {
   font-family: var(--mono);
@@ -179,7 +179,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ---- template selector (app-themed dropdown, not the native select) ---- */
 .tpl-row { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
-.tpl-label { font-size: 0.85rem; color: var(--muted); }
+.tpl-label { font-size: 0.85rem; color: var(--text); }
 .tpl-select-wrap { position: relative; flex: 1; min-width: 0; }
 #tpl-select-btn {
   width: 100%;
@@ -241,7 +241,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 body.no-scroll { overflow: hidden; }
 
 .overlay-head.editor-head { justify-content: space-between; gap: 12px; }
-.overlay-head.editor-head h2 { color: var(--muted); margin-right: auto; }
+.overlay-head.editor-head h2 { margin-right: auto; }
 
 .tpl-list { display: flex; flex-direction: column; gap: 8px; }
 .tpl-item {
@@ -267,14 +267,14 @@ button.danger:hover { border-color: var(--danger); }
 .tpl-name-row { margin-bottom: 14px; }
 .tpl-name-row label {
   display: flex; flex-direction: column; gap: 6px;
-  font-size: 0.85rem; color: var(--muted);
+  font-size: 0.85rem; color: var(--text);
 }
 
 .tpl-section {
   margin: 18px 0 8px;
   font-size: 0.75rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.1em;
-  color: var(--muted);
+  color: var(--text);
 }
 .tpl-events { display: flex; flex-direction: column; gap: 6px; }
 /* one event: a line to tap in the list, or, when open, its fields */
@@ -356,7 +356,7 @@ button.danger:hover { border-color: var(--danger); }
 /* the landing: whether it is listed, and whether to count down to it */
 .tpl-takeoff-row {
   display: flex; gap: 8px; align-items: center;
-  margin-top: 16px; color: var(--muted); font-size: 0.9rem;
+  margin-top: 16px; color: var(--text); font-size: 0.9rem;
 }
 .tpl-takeoff-row .tpl-takeoff-text {
   flex: 1; min-width: 0; padding: 8px 12px;
@@ -397,7 +397,7 @@ button.danger:hover { border-color: var(--danger); }
 /* each line of the text beside the checkbox that keeps it in */
 .copy-inc-label {
   text-align: right; padding-right: 2px; margin-bottom: 4px;
-  font-size: 0.75rem; color: var(--muted);
+  font-size: 0.75rem; color: var(--text);
 }
 .copy-preview {
   background: #0f141c; border: 1px solid var(--border); border-radius: 8px;
@@ -417,7 +417,7 @@ button.danger:hover { border-color: var(--danger); }
   accent-color: var(--accent); width: 20px; height: 20px; margin: 0; padding: 0; flex-shrink: 0;
 }
 .copy-line.left-out .copy-line-text { color: var(--muted); text-decoration: line-through; }
-.copy-opt-label { color: var(--muted); font-size: 0.9rem; }
+.copy-opt-label { color: var(--text); font-size: 0.9rem; }
 .copy-opt-state { color: var(--bright); font-size: 0.9rem; min-width: 2.5ch; }
 .switch {
   position: relative; width: 48px; height: 28px; padding: 0;
@@ -513,6 +513,18 @@ button.danger:hover { border-color: var(--danger); }
   overflow: hidden; border-radius: 6px;
 }
 .sl-strip { position: absolute; inset: 0; will-change: transform; }
+/* The sequence of events above the Zulu bar: a tick at each event's time,
+   its name rising to the right at 45° so events close together still
+   read. The band's height caps a name's length; longer ones end in …. */
+.sl-events { position: relative; height: 46px; margin-top: 4px; overflow: hidden; }
+.sl-ev-strip { position: absolute; inset: 0; will-change: transform; }
+.sl-ev { position: absolute; bottom: 0; width: 0; height: 7px; border-left: 1px solid var(--muted); }
+.sl-ev-label {
+  position: absolute; left: 3px; bottom: 6px;
+  transform-origin: 0 100%; transform: rotate(-45deg);
+  max-width: 56px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 0.65rem; line-height: 1; color: var(--muted);
+}
 .sl-seg {
   position: absolute; top: 0; bottom: 0;
   border: 1px solid var(--border);
