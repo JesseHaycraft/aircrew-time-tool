@@ -12,6 +12,7 @@ const PX_PER_MS = PX_PER_HOUR / HOUR;
 const READOUT_STEP = 5 * MINUTE;     // readouts round to this; the slider itself is 1-minute
 const COVER_MS = 24 * HOUR;          // segments are built for t0 ± this
 const REBUILD_MS = 12 * HOUR;        // rebuild when the drag strays this far
+const SNAP_MS = 10 * MINUTE;         // a release this close to an event lands on it
 const LABEL_GAP_R = 10;              // px from the cursor line to a label on its right
 const LABEL_GAP_L = 20;              // px from a label on the left to the cursor line
 const LABEL_INSET = 16;              // px from a day's end to its label when off the cursor
@@ -219,6 +220,21 @@ export function initSlider({
     schedule();
   }
 
+  // When the bars come to rest within SNAP_MS of an event in the sequence,
+  // they settle on it exactly, so the readouts show the event's own time.
+  function settle() {
+    let best = null;
+    for (const ev of getEvents()) {
+      const d = Math.abs(ev.ms - sliderT);
+      if (d <= SNAP_MS && (best === null || d < Math.abs(best.ms - sliderT))) best = ev;
+    }
+    if (!best) return;
+    sliderT = best.ms;
+    mode = best.ms === getTakeoffMs() ? 'takeoff' : best.ms === getLandingMs() ? 'landing' : null;
+    exactReadout = true;
+    schedule();
+  }
+
   // Momentum after a swipe: keep the release velocity and let it decay
   // exponentially, the bars coasting to a stop on a whole minute.
   function startFling(pxPerMs) {
@@ -241,6 +257,7 @@ export function initSlider({
     }
     if (Math.abs(sliderT - t0) > REBUILD_MS) buildSegments();
     schedule();
+    if (!fling) settle();
   }
 
   let dragId = null;
@@ -277,6 +294,7 @@ export function initSlider({
       const v = (last.x - first.x) / span;
       if (Math.abs(v) * 1000 >= FLING_MIN_PX_S) startFling(v);
     }
+    if (!fling) settle();
     trail = [];
   };
   stage.addEventListener('pointerup', endDrag);

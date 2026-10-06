@@ -139,8 +139,10 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cur
 }
 .resolved.warn { color: var(--warn); }
 .resolved.empty { color: var(--muted); font-family: inherit; font-size: 0.95rem; }
-/* under the entry boxes on the Frag page */
+/* under the entry boxes on the Frag page; the Julian day's calendar day
+   is a quiet aside unless it is a warning */
 .inputs-row + .resolved { margin: 12px 0 0; font-size: 0.9rem; }
+#resolved:not(.warn) { color: var(--muted); }
 
 .zone-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .zone-row button { flex-shrink: 0; }
