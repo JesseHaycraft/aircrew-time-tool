@@ -3,33 +3,16 @@
 // cache so a new HTML page can never run against stale JS.
 import * as T from './time-engine.js?v=0.9.1';
 import { initSlider } from './slider.js?v=0.9.1';
+import { builtInTemplates } from './builtin-templates.js?v=0.9.1';
 
 const VERSION = 'v0.9.1';
 const RELEASED = '2026-10-06';   // the day this version went live; moves with VERSION
 const STORAGE_KEY = 'att-state-v1';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-// minutes from takeoff
-const DEFAULT_TEMPLATE_EVENTS = [
-  { name: 'Stop drink', offsetMin: -720 },
-  { name: 'LFA', offsetMin: -255 },
-  { name: 'Bus', offsetMin: -195 },
-];
-
 const newId = () => (crypto.randomUUID
   ? crypto.randomUUID()
   : `id-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-
-function makeDefaultTemplate() {
-  return {
-    id: newId(),
-    name: 'Standard',
-    takeoffCountdown: false,
-    includeLanding: true,
-    landingCountdown: false,
-    events: DEFAULT_TEMPLATE_EVENTS.map((e) => ({ id: newId(), source: 'takeoff', countdown: false, ...e })),
-  };
-}
 
 // Zone data kept on the device: the last good copy of data/tzdata.json and
 // when the site last answered an update check (see "zone data" below).
@@ -96,6 +79,9 @@ function sanitizeTemplates(raw) {
   const out = [];
   for (const t of raw) {
     if (!t || typeof t.name !== 'string' || !Array.isArray(t.events)) continue;
+    // built-in templates are saved along with the rest but come from the
+    // code each time the app opens, so an update can change them
+    if (t.builtIn === true) continue;
     out.push({
       id: typeof t.id === 'string' ? t.id : newId(),
       name: t.name,
@@ -116,12 +102,8 @@ function loadState() {
     typeof s.zone === 'string' && T.isValidZone(s.zone) ? s.zone
     : Array.isArray(s.zones) && s.zones.length && T.isValidZone(s.zones[0]) ? s.zones[0]
     : deviceZone;
-  const templates = sanitizeTemplates(s.templates);
-  // Seed the starter template only on true first run — an intentionally
-  // emptied list stays empty (templatesInitialized marks the difference).
-  if (!templates.length && s.templatesInitialized !== true) {
-    templates.push(makeDefaultTemplate());
-  }
+  // The built-in templates come first, then the device's own.
+  const templates = [...builtInTemplates(), ...sanitizeTemplates(s.templates)];
   const activeTemplateId = templates.some((t) => t.id === s.activeTemplateId)
     ? s.activeTemplateId
     : (templates[0]?.id ?? null);
@@ -149,7 +131,6 @@ function loadState() {
       : todayUtcStr(),
     zone,
     templates,
-    templatesInitialized: true,
     activeTemplateId,
   };
 }
@@ -937,7 +918,8 @@ function renderTemplateList() {
     meta.className = 'tpl-item-meta';
     const n = t.events.length;
     meta.textContent =
-      `${n} event${n === 1 ? '' : 's'} + takeoff${t.includeLanding !== false ? ' + landing' : ''}`
+      `${t.builtIn ? 'Built-in · ' : ''}`
+      + `${n} event${n === 1 ? '' : 's'} + takeoff${t.includeLanding !== false ? ' + landing' : ''}`
       + `${t.id === state.activeTemplateId ? ' · in use' : ''}`;
     head.append(nameEl, meta);
 
@@ -1016,7 +998,9 @@ function renderTemplateList() {
         renderTemplateList();
       });
 
-      actions.append(useBtn, editBtn, dupBtn, delBtn);
+      // a built-in template is only used or copied
+      if (t.builtIn) actions.append(useBtn, dupBtn);
+      else actions.append(useBtn, editBtn, dupBtn, delBtn);
     }
 
     item.append(head, actions);

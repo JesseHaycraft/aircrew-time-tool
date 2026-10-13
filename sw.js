@@ -19,6 +19,7 @@ const SHELL = [
   `./js/app.js?v=${VERSION}`,
   `./js/time-engine.js?v=${VERSION}`,
   `./js/slider.js?v=${VERSION}`,
+  `./js/builtin-templates.js?v=${VERSION}`,
   `./js/zone-coords.js?v=${VERSION}`,
   './manifest.webmanifest',
   './icons/icon-192.png',
