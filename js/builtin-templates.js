@@ -3,36 +3,41 @@
 // good: a saved choice of one of them must survive an update, and a copy
 // keeps its event ids.
 //
-// A line is [name, offset in minutes, source]. The source names an earlier
-// line of the same template; a line without one counts from takeoff.
+// A line is [name, offset in minutes, options]. In the options, `from`
+// names an earlier line of the same template the offset counts from (a
+// line without one counts from takeoff) and `countdown` turns on the
+// live countdown to the event.
 
 const TEMPLATES = [
   ['mcguire-single', 'McGuire local single-ship', [
+    ['Enter crew rest', -12 * 60, { from: 'Show', countdown: true }],
     ['Stop drink', -12 * 60],
     ['Show', -150],
     ['Brief', -120],
     ['Step', -90],
     ['Doors closed', -30],
     ['Engine start', -25],
-    ['Duty day ends', 16 * 60, 'Show'],
+    ['Duty day ends', 16 * 60, { from: 'Show' }],
   ]],
   ['mcguire-formation', 'McGuire local formation', [
+    ['Enter crew rest', -12 * 60, { from: 'Show', countdown: true }],
     ['Stop drink', -12 * 60],
     ['Show', -150],
     ['Formation brief', -135],
     ['Step', -90],
     ['Doors closed', -30],
     ['Engine start', -25],
-    ['Duty day ends', 16 * 60, 'Show'],
+    ['Duty day ends', 16 * 60, { from: 'Show' }],
   ]],
   ['mcguire-deice', 'McGuire local de-ice', [
+    ['Enter crew rest', -12 * 60, { from: 'Show', countdown: true }],
     ['Stop drink', -12 * 60],
     ['Show', -150],
     ['Brief', -120],
     ['Step', -105],
     ['Doors closed', -55],
     ['Engine start', -25],
-    ['Duty day ends', 16 * 60, 'Show'],
+    ['Duty day ends', 16 * 60, { from: 'Show' }],
   ]],
 ];
 
@@ -44,15 +49,15 @@ function build([id, name, lines]) {
     id,
     name,
     builtIn: true,
-    takeoffCountdown: false,
+    takeoffCountdown: true,
     includeLanding: true,
     landingCountdown: false,
-    events: lines.map(([lineName, offsetMin, from]) => ({
+    events: lines.map(([lineName, offsetMin, { from, countdown = false } = {}]) => ({
       id: eventId(lineName),
       name: lineName,
       source: from === undefined ? 'takeoff' : eventId(from),
       offsetMin,
-      countdown: false,
+      countdown,
     })),
   };
 }

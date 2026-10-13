@@ -25,14 +25,13 @@ test('built-in templates: fixed ids, flagged built-in, fresh objects each call',
   for (const t of a) {
     assert.equal(t.builtIn, true);
     assert.equal(t.includeLanding, true);
-    assert.equal(t.takeoffCountdown, false);
     assert.equal(t.landingCountdown, false);
     const evIds = t.events.map((e) => e.id);
     assert.equal(new Set(evIds).size, evIds.length, `${t.name}: event ids repeat`);
     for (const e of t.events) {
       assert.notEqual(e.id, 'takeoff');
       assert.notEqual(e.id, 'landing');
-      assert.equal(e.countdown, false);
+      assert.equal(typeof e.countdown, 'boolean');
       assert.ok(Number.isInteger(e.offsetMin));
     }
   }
@@ -54,19 +53,34 @@ test('built-in templates: the event times', () => {
   };
   const [single, formation, deice] = builtInTemplates();
   assert.deepEqual(at(single), {
-    'Stop drink': -12, 'Show': -2.5, 'Brief': -2, 'Step': -1.5,
+    'Enter crew rest': -14.5, 'Stop drink': -12, 'Show': -2.5, 'Brief': -2, 'Step': -1.5,
     'Doors closed': -0.5, 'Engine start': -25 / 60, 'Duty day ends': 13.5,
   });
   assert.deepEqual(at(formation), {
-    'Stop drink': -12, 'Show': -2.5, 'Formation brief': -2.25, 'Step': -1.5,
+    'Enter crew rest': -14.5, 'Stop drink': -12, 'Show': -2.5, 'Formation brief': -2.25, 'Step': -1.5,
     'Doors closed': -0.5, 'Engine start': -25 / 60, 'Duty day ends': 13.5,
   });
   assert.deepEqual(at(deice), {
-    'Stop drink': -12, 'Show': -2.5, 'Brief': -2, 'Step': -1.75,
+    'Enter crew rest': -14.5, 'Stop drink': -12, 'Show': -2.5, 'Brief': -2, 'Step': -1.75,
     'Doors closed': -55 / 60, 'Engine start': -25 / 60, 'Duty day ends': 13.5,
   });
-  // the duty day is counted from show, not takeoff
+  // crew rest and the duty day are counted from show, not takeoff
+  const show = single.events.find((e) => e.name === 'Show');
+  const rest = single.events.find((e) => e.name === 'Enter crew rest');
   const dde = single.events.find((e) => e.name === 'Duty day ends');
-  assert.equal(dde.source, single.events.find((e) => e.name === 'Show').id);
+  assert.equal(rest.source, show.id);
+  assert.equal(rest.offsetMin, -12 * 60);
+  assert.equal(dde.source, show.id);
   assert.equal(dde.offsetMin, 16 * 60);
+});
+
+test('built-in templates: countdowns on crew rest and takeoff only', () => {
+  for (const t of builtInTemplates()) {
+    assert.equal(t.takeoffCountdown, true, t.name);
+    assert.deepEqual(
+      t.events.filter((e) => e.countdown).map((e) => e.name),
+      ['Enter crew rest'],
+      t.name,
+    );
+  }
 });
