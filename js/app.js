@@ -98,6 +98,22 @@ function sanitizeTemplates(raw) {
   return out;
 }
 
+// The "Standard" starter that versions before v0.10.0 seeded on first
+// run: Stop drink, LFA and Bus, counted from takeoff. The built-in
+// templates replace it, so a saved template that still looks like it is
+// dropped, once (starterRemoved records that it has been done, so a
+// template the user later makes to the same pattern is left alone).
+// A renamed or re-timed one is the user's work and stays. (The pattern
+// lives inside the function because loadState runs before this point in
+// the module is reached.)
+function isOldStarter(t) {
+  const starter = [['Stop drink', -720], ['LFA', -255], ['Bus', -195]];
+  return t.name === 'Standard'
+    && t.events.length === starter.length
+    && t.events.every((e, i) => e.name === starter[i][0] && e.offsetMin === starter[i][1]
+      && e.source === 'takeoff');
+}
+
 // What was ticked the last time each template's times were copied:
 // template id → event id (or 'takeoff' / 'landing') → ticked. Kept only
 // for templates that still exist.
@@ -121,7 +137,9 @@ function loadState() {
     : Array.isArray(s.zones) && s.zones.length && T.isValidZone(s.zones[0]) ? s.zones[0]
     : deviceZone;
   // The built-in templates come first, then the device's own.
-  const templates = [...builtInTemplates(), ...sanitizeTemplates(s.templates)];
+  let own = sanitizeTemplates(s.templates);
+  if (s.starterRemoved !== true) own = own.filter((t) => !isOldStarter(t));
+  const templates = [...builtInTemplates(), ...own];
   const activeTemplateId = templates.some((t) => t.id === s.activeTemplateId)
     ? s.activeTemplateId
     : (templates[0]?.id ?? null);
@@ -150,6 +168,7 @@ function loadState() {
     zone,
     templates,
     activeTemplateId,
+    starterRemoved: true,
     copyChoices: sanitizeCopyChoices(s.copyChoices, templates),
   };
 }
