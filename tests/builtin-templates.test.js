@@ -61,8 +61,9 @@ test('built-in templates: the event times', () => {
     'Doors closed': -0.5, 'Engine start': -25 / 60, 'Duty day ends': 13.5,
   });
   assert.deepEqual(at(deice), {
-    'Enter crew rest': -14.5, 'Stop drink': -12, 'Show': -2.5, 'Brief': -2, 'Step': -1.75,
-    'Doors closed': -55 / 60, 'Engine start': -25 / 60, 'Duty day ends': 13.5,
+    'Enter crew rest': -14.5, 'Stop drink': -12, 'MX de-ice start': -5, 'MX de-ice complete': -3,
+    'Show': -2.5, 'Brief': -2, 'Step': -1.75, 'Doors closed': -55 / 60, 'Anti-ice start': -55 / 60,
+    'Anti-ice complete': -25 / 60, 'Engine start': -25 / 60, 'Duty day ends': 13.5,
   });
   // crew rest and the duty day are counted from show, not takeoff
   const show = single.events.find((e) => e.name === 'Show');
