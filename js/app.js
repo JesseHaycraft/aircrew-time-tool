@@ -41,8 +41,8 @@ let takeoffMs = null;
 let landingMs = null;   // from the Landing card, only when a takeoff is set too
 
 // A template's events as the app keeps them: {id, name, source, offsetMin,
-// countdown, copy}, where copy says whether the event is ticked when the
-// times are copied and source is 'takeoff', 'landing' or another event's id
+// countdown, copy}, where copy is whether the event starts ticked in the
+// copy popup and source is 'takeoff', 'landing' or another event's id
 // (see "sequence of events" in time-engine.js). Versions before sources
 // kept a signed text such as "-4:15", always counted from takeoff.
 function sanitizeEvents(raw) {
@@ -98,6 +98,20 @@ function sanitizeTemplates(raw) {
   return out;
 }
 
+// What was ticked the last time each template's times were copied:
+// template id → event id (or 'takeoff' / 'landing') → ticked. Kept only
+// for templates that still exist.
+function sanitizeCopyChoices(raw, templates) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const t of templates) {
+    const m = raw[t.id];
+    if (!m || typeof m !== 'object') continue;
+    out[t.id] = Object.fromEntries(Object.entries(m).filter(([, v]) => typeof v === 'boolean'));
+  }
+  return out;
+}
+
 function loadState() {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? {}; } catch { /* corrupted */ }
@@ -136,6 +150,7 @@ function loadState() {
     zone,
     templates,
     activeTemplateId,
+    copyChoices: sanitizeCopyChoices(s.copyChoices, templates),
   };
 }
 
@@ -163,6 +178,7 @@ function timelineEvents() {
     : source === 'landing' ? 'Landing'
     : nameOf(events.find((e) => e.id === source)));
   const rows = events.map((e) => ({
+    id: e.id,
     name: nameOf(e),
     ms: times.get(e.id),
     from: `${sourceName(e.source)} ${e.offsetMin < 0 ? '\u2212' : '+'} ${T.minutesToHMM(e.offsetMin)}`,
@@ -170,12 +186,12 @@ function timelineEvents() {
     copy: e.copy !== false,
   }));
   rows.push({
-    name: 'Takeoff', ms: takeoffMs,
+    id: 'takeoff', name: 'Takeoff', ms: takeoffMs,
     countdown: tpl?.takeoffCountdown === true, copy: tpl?.takeoffCopy !== false,
   });
   if (landingMs !== null && tpl?.includeLanding !== false) {
     rows.push({
-      name: 'Landing', ms: landingMs,
+      id: 'landing', name: 'Landing', ms: landingMs,
       countdown: tpl?.landingCountdown === true, copy: tpl?.landingCopy !== false,
     });
   }
@@ -690,12 +706,25 @@ function copyLines() {
 // opens they are set afresh from the template.
 const copyLeftOut = new Set();
 
-// The positions the template leaves out: the events not marked for
-// copying. buildCopyLines puts the zone header first (always in), then
-// the events in time order, which is how timelineEvents already has them.
-function templateCopyLeftOut() {
+// The positions left out when the popup opens: whatever was unticked the
+// last time this template's times were copied or, for a line that was
+// not there then, the template's own start (the built-ins start with
+// crew rest, show and takeoff; everything else starts ticked).
+// buildCopyLines puts the zone header first (always in), then the events
+// in time order, which is how timelineEvents already has them.
+function rememberedCopyLeftOut() {
+  const chosen = state.copyChoices[activeTemplate()?.id] ?? {};
   const events = timelineEvents().filter((ev) => ev.ms !== null);
-  return events.flatMap((ev, i) => (ev.copy === false ? [i + 1] : []));
+  return events.flatMap((ev, i) => ((chosen[ev.id] ?? ev.copy !== false) ? [] : [i + 1]));
+}
+
+// Keep the ticks for the next time this template's times are copied.
+function rememberCopyChoices() {
+  const tpl = activeTemplate();
+  if (!tpl) return;
+  const events = timelineEvents().filter((ev) => ev.ms !== null);
+  state.copyChoices[tpl.id] = Object.fromEntries(events.map((ev, i) => [ev.id, !copyLeftOut.has(i + 1)]));
+  saveState();
 }
 
 // The text Copy puts on the clipboard: the lines still ticked.
@@ -736,7 +765,7 @@ function renderCopyOptions() {
 function openCopy() {
   if (takeoffMs === null) return;
   copyLeftOut.clear();
-  for (const i of templateCopyLeftOut()) copyLeftOut.add(i);
+  for (const i of rememberedCopyLeftOut()) copyLeftOut.add(i);
   renderCopyOptions();
   copyOverlay.hidden = false;
   document.body.classList.add('no-scroll');
@@ -962,6 +991,7 @@ function renderTemplateList() {
       yes.addEventListener('click', () => {
         confirmDeleteId = null;
         state.templates = state.templates.filter((x) => x.id !== t.id);
+        delete state.copyChoices[t.id];
         if (state.activeTemplateId === t.id) {
           state.activeTemplateId = state.templates[0]?.id ?? null;
         }
@@ -1000,7 +1030,7 @@ function renderTemplateList() {
       dupBtn.type = 'button';
       dupBtn.textContent = 'Duplicate';
       dupBtn.addEventListener('click', () => {
-        state.templates.push({
+        const copy = {
           id: newId(),
           name: uniqueTemplateName(`${t.name} (copy)`),
           takeoffCountdown: t.takeoffCountdown === true,
@@ -1009,7 +1039,10 @@ function renderTemplateList() {
           takeoffCopy: t.takeoffCopy !== false,
           landingCopy: t.landingCopy !== false,
           events: t.events.map((e) => ({ ...e })),
-        });
+        };
+        state.templates.push(copy);
+        // the copy starts with the original's remembered ticks (same event ids)
+        if (state.copyChoices[t.id]) state.copyChoices[copy.id] = { ...state.copyChoices[t.id] };
         saveState();
         renderTemplateList();
         renderTemplateSelect();
@@ -1070,16 +1103,10 @@ function renderTemplateEditor({ focusName = false } = {}) {
     if (focusName) openItem.querySelector('.ev-name')?.focus();
   }
   tplLandingInclude.checked = draft.includeLanding !== false;
-  tplLandingCdSlot.replaceChildren(
-    stopwatchToggle(
-      () => draft.landingCountdown === true,
-      (on) => { draft.landingCountdown = on; },
-    ),
-    clipboardToggle(
-      () => draft.landingCopy !== false,
-      (on) => { draft.landingCopy = on; },
-    ),
-  );
+  tplLandingCdSlot.replaceChildren(stopwatchToggle(
+    () => draft.landingCountdown === true,
+    (on) => { draft.landingCountdown = on; },
+  ));
 }
 
 function iconSpan(cls, svg) {
@@ -1151,20 +1178,28 @@ function wideToggle(svg, onText, offText, get, set) {
 }
 
 const countdownButton = (get, set) => wideToggle(STOPWATCH_SVG, 'Countdown on', 'Countdown off', get, set);
-// Whether the event is ticked when the times are copied.
-const copyButton = (get, set) => wideToggle(CLIPBOARD_SVG, 'Copied', 'Not copied', get, set);
 
-// The takeoff, open: only its countdown and copying can be changed.
+// "Done" closes the open event, as the arrow at its top does.
+function doneEventButton() {
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.textContent = 'Done';
+  done.addEventListener('click', () => {
+    openEventId = null;
+    renderTemplateEditor();
+  });
+  return done;
+}
+
+// The takeoff, open: only its countdown can be changed.
 function renderOpenTakeoff() {
   const top = el('ev-line');
   top.append(el('ev-fixed-name', 'Takeoff'), closeEventButton());
   const foot = el('ev-line ev-foot');
-  const opts = el('ev-foot-opts');
-  opts.append(
+  foot.append(
     countdownButton(() => draft.takeoffCountdown === true, (on) => { draft.takeoffCountdown = on; }),
-    copyButton(() => draft.takeoffCopy !== false, (on) => { draft.takeoffCopy = on; }),
+    doneEventButton(),
   );
-  foot.append(opts);
   const item = el('ev-item open');
   item.append(top, foot);
   return item;
@@ -1245,12 +1280,9 @@ function renderOpenEvent(ev) {
   const sentence = el('ev-line');
   sentence.append(offIn, when, select);
   const foot = el('ev-line ev-foot');
-  const opts = el('ev-foot-opts');
-  opts.append(
-    countdownButton(() => ev.countdown === true, (on) => { ev.countdown = on; }),
-    copyButton(() => ev.copy !== false, (on) => { ev.copy = on; }),
-  );
-  foot.append(opts, del);
+  const end = el('ev-foot-group');
+  end.append(del, doneEventButton());
+  foot.append(countdownButton(() => ev.countdown === true, (on) => { ev.countdown = on; }), end);
   const item = el('ev-item open');
   item.append(top, sentence, foot);
   return item;
@@ -1265,13 +1297,6 @@ const STOPWATCH_SVG =
   + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
   + '<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2"/>'
   + '<path d="M9.5 2.5h5"/><path d="M12 2.5v3.5"/><path d="M18.5 7.5l1.5-1.5"/></svg>';
-
-const CLIPBOARD_SVG =
-  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" '
-  + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-  + '<rect x="8" y="2" width="8" height="4" rx="1"/>'
-  + '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>'
-  + '<path d="M9 14l2 2 4-4"/></svg>';
 
 // An icon button, amber when on (a user choice), grey when off. Tapping
 // flips it.
@@ -1295,8 +1320,6 @@ function iconToggle(svg, onTitle, offTitle, get, set) {
 
 const stopwatchToggle = (get, set) => iconToggle(STOPWATCH_SVG,
   'Countdown on — tap to turn off', 'Show a countdown for this event', get, set);
-const clipboardToggle = (get, set) => iconToggle(CLIPBOARD_SVG,
-  'Copied with the times — tap to leave out', 'Include this event when the times are copied', get, set);
 
 function showListView() {
   tplEditorView.hidden = true;
@@ -1667,6 +1690,7 @@ function init() {
   });
   copyDoBtn.addEventListener('click', async () => {
     const text = currentCopyText();
+    rememberCopyChoices();
     try {
       await navigator.clipboard.writeText(text);
     } catch {
