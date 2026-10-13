@@ -5,14 +5,15 @@
 //
 // A line is [name, offset in minutes, options]. In the options, `from`
 // names an earlier line of the same template the offset counts from (a
-// line without one counts from takeoff) and `countdown` turns on the
-// live countdown to the event.
+// line without one counts from takeoff), `countdown` turns on the live
+// countdown to the event and `copy` ticks it when the times are copied
+// (only crew rest, show and takeoff are, unless the user says otherwise).
 
 const TEMPLATES = [
   ['mcguire-single', 'McGuire local single-ship', [
-    ['Enter crew rest', -12 * 60, { from: 'Show', countdown: true }],
+    ['Enter crew rest', -12 * 60, { from: 'Show', countdown: true, copy: true }],
     ['Stop drink', -12 * 60],
-    ['Show', -150],
+    ['Show', -150, { copy: true }],
     ['Brief', -120],
     ['Step', -90],
     ['Doors closed', -30],
@@ -20,9 +21,9 @@ const TEMPLATES = [
     ['Duty day ends', 16 * 60, { from: 'Show' }],
   ]],
   ['mcguire-formation', 'McGuire local formation', [
-    ['Enter crew rest', -12 * 60, { from: 'Show', countdown: true }],
+    ['Enter crew rest', -12 * 60, { from: 'Show', countdown: true, copy: true }],
     ['Stop drink', -12 * 60],
-    ['Show', -150],
+    ['Show', -150, { copy: true }],
     ['Formation brief', -135],
     ['Step', -90],
     ['Doors closed', -30],
@@ -30,11 +31,11 @@ const TEMPLATES = [
     ['Duty day ends', 16 * 60, { from: 'Show' }],
   ]],
   ['mcguire-deice', 'McGuire local de-ice', [
-    ['Enter crew rest', -12 * 60, { from: 'Show', countdown: true }],
+    ['Enter crew rest', -12 * 60, { from: 'Show', countdown: true, copy: true }],
     ['Stop drink', -12 * 60],
     ['MX de-ice start', -5 * 60],
     ['MX de-ice complete', -3 * 60],
-    ['Show', -150],
+    ['Show', -150, { copy: true }],
     ['Brief', -120],
     ['Step', -105],
     ['Doors closed', -55],
@@ -56,12 +57,15 @@ function build([id, name, lines]) {
     takeoffCountdown: true,
     includeLanding: true,
     landingCountdown: false,
-    events: lines.map(([lineName, offsetMin, { from, countdown = false } = {}]) => ({
+    takeoffCopy: true,
+    landingCopy: false,
+    events: lines.map(([lineName, offsetMin, { from, countdown = false, copy = false } = {}]) => ({
       id: eventId(lineName),
       name: lineName,
       source: from === undefined ? 'takeoff' : eventId(from),
       offsetMin,
       countdown,
+      copy,
     })),
   };
 }

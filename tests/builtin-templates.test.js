@@ -85,3 +85,16 @@ test('built-in templates: countdowns on crew rest and takeoff only', () => {
     );
   }
 });
+
+test('built-in templates: only crew rest, show and takeoff are copied by default', () => {
+  for (const t of builtInTemplates()) {
+    assert.equal(t.takeoffCopy, true, t.name);
+    assert.equal(t.landingCopy, false, t.name);
+    assert.deepEqual(
+      t.events.filter((e) => e.copy).map((e) => e.name),
+      ['Enter crew rest', 'Show'],
+      t.name,
+    );
+    for (const e of t.events) assert.equal(typeof e.copy, 'boolean');
+  }
+});

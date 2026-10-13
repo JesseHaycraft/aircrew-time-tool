@@ -41,7 +41,8 @@ let takeoffMs = null;
 let landingMs = null;   // from the Landing card, only when a takeoff is set too
 
 // A template's events as the app keeps them: {id, name, source, offsetMin,
-// countdown}, where source is 'takeoff', 'landing' or another event's id
+// countdown, copy}, where copy says whether the event is ticked when the
+// times are copied and source is 'takeoff', 'landing' or another event's id
 // (see "sequence of events" in time-engine.js). Versions before sources
 // kept a signed text such as "-4:15", always counted from takeoff.
 function sanitizeEvents(raw) {
@@ -62,6 +63,7 @@ function sanitizeEvents(raw) {
       source: typeof e.source === 'string' ? e.source : 'takeoff',
       offsetMin,
       countdown: e.countdown === true,
+      copy: e.copy !== false,
     });
   }
   // a source that isn't there, or that leads back to the event itself,
@@ -88,6 +90,8 @@ function sanitizeTemplates(raw) {
       takeoffCountdown: t.takeoffCountdown === true,
       includeLanding: t.includeLanding !== false,
       landingCountdown: t.landingCountdown === true,
+      takeoffCopy: t.takeoffCopy !== false,
+      landingCopy: t.landingCopy !== false,
       events: sanitizeEvents(t.events),
     });
   }
@@ -163,10 +167,17 @@ function timelineEvents() {
     ms: times.get(e.id),
     from: `${sourceName(e.source)} ${e.offsetMin < 0 ? '\u2212' : '+'} ${T.minutesToHMM(e.offsetMin)}`,
     countdown: e.countdown === true,
+    copy: e.copy !== false,
   }));
-  rows.push({ name: 'Takeoff', ms: takeoffMs, countdown: tpl?.takeoffCountdown === true });
+  rows.push({
+    name: 'Takeoff', ms: takeoffMs,
+    countdown: tpl?.takeoffCountdown === true, copy: tpl?.takeoffCopy !== false,
+  });
   if (landingMs !== null && tpl?.includeLanding !== false) {
-    rows.push({ name: 'Landing', ms: landingMs, countdown: tpl?.landingCountdown === true });
+    rows.push({
+      name: 'Landing', ms: landingMs,
+      countdown: tpl?.landingCountdown === true, copy: tpl?.landingCopy !== false,
+    });
   }
   return rows.sort((a, b) => (a.ms === null) - (b.ms === null) || (a.ms ?? 0) - (b.ms ?? 0));
 }
@@ -675,9 +686,17 @@ function copyLines() {
   return T.buildCopyLines(takeoffMs, events, [state.zone], { zulu: state.showZulu });
 }
 
-// Lines unticked in the copy popup, by position. Every line is ticked
-// again each time the popup opens.
+// Lines unticked in the copy popup, by position. Each time the popup
+// opens they are set afresh from the template.
 const copyLeftOut = new Set();
+
+// The positions the template leaves out: the events not marked for
+// copying. buildCopyLines puts the zone header first (always in), then
+// the events in time order, which is how timelineEvents already has them.
+function templateCopyLeftOut() {
+  const events = timelineEvents().filter((ev) => ev.ms !== null);
+  return events.flatMap((ev, i) => (ev.copy === false ? [i + 1] : []));
+}
 
 // The text Copy puts on the clipboard: the lines still ticked.
 function currentCopyText() {
@@ -717,6 +736,7 @@ function renderCopyOptions() {
 function openCopy() {
   if (takeoffMs === null) return;
   copyLeftOut.clear();
+  for (const i of templateCopyLeftOut()) copyLeftOut.add(i);
   renderCopyOptions();
   copyOverlay.hidden = false;
   document.body.classList.add('no-scroll');
@@ -814,6 +834,7 @@ function toDraftEvent(e) {
     after: e.offsetMin > 0,
     offsetText: T.minutesToHMM(e.offsetMin),
     countdown: e.countdown === true,
+    copy: e.copy !== false,
   };
 }
 
@@ -828,7 +849,10 @@ function draftOffsetMin(d) {
 function fromDraftEvent(d) {
   const offsetMin = draftOffsetMin(d);
   if (offsetMin === null) return null;
-  return { id: d.id, name: d.name, source: d.source, offsetMin, countdown: d.countdown === true };
+  return {
+    id: d.id, name: d.name, source: d.source, offsetMin,
+    countdown: d.countdown === true, copy: d.copy !== false,
+  };
 }
 
 // Take an event out of the draft. Events that counted from it now count
@@ -982,6 +1006,8 @@ function renderTemplateList() {
           takeoffCountdown: t.takeoffCountdown === true,
           includeLanding: t.includeLanding !== false,
           landingCountdown: t.landingCountdown === true,
+          takeoffCopy: t.takeoffCopy !== false,
+          landingCopy: t.landingCopy !== false,
           events: t.events.map((e) => ({ ...e })),
         });
         saveState();
@@ -1044,10 +1070,16 @@ function renderTemplateEditor({ focusName = false } = {}) {
     if (focusName) openItem.querySelector('.ev-name')?.focus();
   }
   tplLandingInclude.checked = draft.includeLanding !== false;
-  tplLandingCdSlot.replaceChildren(stopwatchToggle(
-    () => draft.landingCountdown === true,
-    (on) => { draft.landingCountdown = on; },
-  ));
+  tplLandingCdSlot.replaceChildren(
+    stopwatchToggle(
+      () => draft.landingCountdown === true,
+      (on) => { draft.landingCountdown = on; },
+    ),
+    clipboardToggle(
+      () => draft.landingCopy !== false,
+      (on) => { draft.landingCopy = on; },
+    ),
+  );
 }
 
 function iconSpan(cls, svg) {
@@ -1099,34 +1131,40 @@ function closeEventButton() {
   return close;
 }
 
-// "Countdown on" / "Countdown off", amber when on.
-function countdownButton(get, set) {
-  const cd = document.createElement('button');
-  cd.type = 'button';
-  cd.className = 'ev-cd-wide';
+// A labelled toggle, amber when on: "Countdown on" / "Countdown off".
+function wideToggle(svg, onText, offText, get, set) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'ev-wide-toggle';
   const text = document.createElement('span');
-  cd.append(iconSpan('', STOPWATCH_SVG), text);
+  b.append(iconSpan('', svg), text);
   const sync = () => {
-    cd.setAttribute('aria-pressed', String(get()));
-    text.textContent = get() ? 'Countdown on' : 'Countdown off';
+    b.setAttribute('aria-pressed', String(get()));
+    text.textContent = get() ? onText : offText;
   };
-  cd.addEventListener('click', () => {
+  b.addEventListener('click', () => {
     set(!get());
     sync();
   });
   sync();
-  return cd;
+  return b;
 }
 
-// The takeoff, open: only its countdown can be changed.
+const countdownButton = (get, set) => wideToggle(STOPWATCH_SVG, 'Countdown on', 'Countdown off', get, set);
+// Whether the event is ticked when the times are copied.
+const copyButton = (get, set) => wideToggle(CLIPBOARD_SVG, 'Copied', 'Not copied', get, set);
+
+// The takeoff, open: only its countdown and copying can be changed.
 function renderOpenTakeoff() {
   const top = el('ev-line');
   top.append(el('ev-fixed-name', 'Takeoff'), closeEventButton());
   const foot = el('ev-line ev-foot');
-  foot.append(countdownButton(
-    () => draft.takeoffCountdown === true,
-    (on) => { draft.takeoffCountdown = on; },
-  ));
+  const opts = el('ev-foot-opts');
+  opts.append(
+    countdownButton(() => draft.takeoffCountdown === true, (on) => { draft.takeoffCountdown = on; }),
+    copyButton(() => draft.takeoffCopy !== false, (on) => { draft.takeoffCopy = on; }),
+  );
+  foot.append(opts);
   const item = el('ev-item open');
   item.append(top, foot);
   return item;
@@ -1207,10 +1245,12 @@ function renderOpenEvent(ev) {
   const sentence = el('ev-line');
   sentence.append(offIn, when, select);
   const foot = el('ev-line ev-foot');
-  foot.append(countdownButton(
-    () => ev.countdown === true,
-    (on) => { ev.countdown = on; },
-  ), del);
+  const opts = el('ev-foot-opts');
+  opts.append(
+    countdownButton(() => ev.countdown === true, (on) => { ev.countdown = on; }),
+    copyButton(() => ev.copy !== false, (on) => { ev.copy = on; }),
+  );
+  foot.append(opts, del);
   const item = el('ev-item open');
   item.append(top, sentence, foot);
   return item;
@@ -1226,16 +1266,24 @@ const STOPWATCH_SVG =
   + '<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2"/>'
   + '<path d="M9.5 2.5h5"/><path d="M12 2.5v3.5"/><path d="M18.5 7.5l1.5-1.5"/></svg>';
 
-// Amber when on (a user choice), grey when off. Tapping flips it.
-function stopwatchToggle(get, set) {
+const CLIPBOARD_SVG =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" '
+  + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<rect x="8" y="2" width="8" height="4" rx="1"/>'
+  + '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>'
+  + '<path d="M9 14l2 2 4-4"/></svg>';
+
+// An icon button, amber when on (a user choice), grey when off. Tapping
+// flips it.
+function iconToggle(svg, onTitle, offTitle, get, set) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'ev-cd';
-  b.innerHTML = STOPWATCH_SVG;
+  b.innerHTML = svg;
   const sync = () => {
     const on = get();
     b.setAttribute('aria-pressed', String(on));
-    b.title = on ? 'Countdown on — tap to turn off' : 'Show a countdown for this event';
+    b.title = on ? onTitle : offTitle;
   };
   b.addEventListener('click', () => {
     set(!get());
@@ -1244,6 +1292,11 @@ function stopwatchToggle(get, set) {
   sync();
   return b;
 }
+
+const stopwatchToggle = (get, set) => iconToggle(STOPWATCH_SVG,
+  'Countdown on — tap to turn off', 'Show a countdown for this event', get, set);
+const clipboardToggle = (get, set) => iconToggle(CLIPBOARD_SVG,
+  'Copied with the times — tap to leave out', 'Include this event when the times are copied', get, set);
 
 function showListView() {
   tplEditorView.hidden = true;
@@ -1264,6 +1317,8 @@ function openEditorFor(tpl) {
     takeoffCountdown: tpl.takeoffCountdown === true,
     includeLanding: tpl.includeLanding !== false,
     landingCountdown: tpl.landingCountdown === true,
+    takeoffCopy: tpl.takeoffCopy !== false,
+    landingCopy: tpl.landingCopy !== false,
     events: tpl.events.map(toDraftEvent),
   };
   openEventId = null;
@@ -1278,6 +1333,8 @@ function openEditorForNew() {
     takeoffCountdown: false,
     includeLanding: true,
     landingCountdown: false,
+    takeoffCopy: true,
+    landingCopy: true,
     events: [],
   };
   openEventId = null;

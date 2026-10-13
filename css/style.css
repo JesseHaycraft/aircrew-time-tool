@@ -331,11 +331,12 @@ button.danger:hover { border-color: var(--danger); }
 .ev-source:focus { outline: none; border-color: var(--accent); }
 .ev-foot { justify-content: space-between; }
 .ev-foot button { font-size: 0.85rem; padding: 6px 12px; }
-.ev-cd-wide {
+.ev-foot-opts { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.ev-wide-toggle {
   display: inline-flex; align-items: center; gap: 6px;
   background: transparent; color: var(--muted);
 }
-.ev-cd-wide[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: #1c2432; }
+.ev-wide-toggle[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: #1c2432; }
 
 /* stopwatch countdown toggle: amber = on (a user choice), grey = off */
 .ev-cd {
@@ -355,7 +356,7 @@ button.danger:hover { border-color: var(--danger); }
 }
 .row-x:hover { color: var(--danger); }
 
-/* the landing: whether it is listed, and whether to count down to it */
+/* the landing: whether it is listed, counted down to, and copied */
 .tpl-takeoff-row {
   display: flex; gap: 8px; align-items: center;
   margin-top: 16px; color: var(--text); font-size: 0.9rem;
@@ -364,7 +365,7 @@ button.danger:hover { border-color: var(--danger); }
   flex: 1; min-width: 0; padding: 8px 12px;
   border: 1px dashed var(--border); border-radius: 8px;
 }
-.tpl-takeoff-row .tpl-takeoff-cd { display: inline-flex; flex-shrink: 0; }
+.tpl-takeoff-row .tpl-takeoff-cd { display: inline-flex; gap: 8px; flex-shrink: 0; }
 .tpl-landing-text { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .tpl-landing-text input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
 
